@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Search & Summarization - VAST DataEngine Blueprint</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48.3 41.6'%3E%3Cpath d='M14.3,23.9c-0.8,0.5-1.9,0.3-2.5-0.6L0.5,4.6C-0.5,3.1,0,0.8,2.1,0c0.1,0,0.1,0,0.2,0h12c1,0,1.8,0.9,1.8,1.9v2.2c0,1-0.8,1.8-1.8,1.8h-3H8.1l8.6,14.3c0.5,0.8,0.3,1.9-0.6,2.5L14.3,23.9z' fill='%23333'/%3E%3Cpath d='M22.7,5.9c-1,0-1.7-0.8-1.8-1.8l0-1.9c0-1.5,1.2-2.1,2.7-2.1l21.8,0c1.8,0,3.2,1.6,2.8,3.8c0,0.1,0,0.1-0.1,0.2l-6,10c-0.5,0.8-1.6,1.1-2.4,0.6l-2-1.2c-0.8-0.5-1.1-1.6-0.5-2.4l3.1-5.1L22.7,5.9z' fill='%231FD9FE'/%3E%3Cpath d='M32.9,18.1c0.5-0.8,1.6-1.1,2.4-0.6l1.7,1c1.3,0.8,1.2,2.1,0.4,3.4l-11,18.3c-0.9,1.5-2.7,1.9-4.4,0.4c0,0-0.1-0.1-0.1-0.2l-6-10.1c-0.4-0.9-0.1-1.9,0.8-2.3l2-1.1c0.9-0.4,1.9-0.1,2.4,0.8l3,5.1L32.9,18.1z' fill='%23333'/%3E%3C/svg%3E">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0f1a;
+      --bg-secondary: #111827;
+      --bg-card: #1a2234;
+      --bg-card-hover: #1f2937;
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --accent-primary: #73c8fd;
+      --border-color: rgba(115, 200, 253, 0.2);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+    
+    /* Header - matches main page */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: var(--bg-primary);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .vast-logo {
+      height: 28px;
+      filter: brightness(1.2);
+    }
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .header-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    .back-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.875rem;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+    .back-link:hover {
+      color: var(--accent-primary);
+      background: rgba(115, 200, 253, 0.1);
+    }
+    .back-link .material-icons { font-size: 18px; }
+    
+    .page-content { padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; }
+    .blueprint-container { display: flex; flex-direction: column; gap: 1.5rem; }
+    
+    /* AI OS Section */
+    .ai-os-section {
+      margin-bottom: 1.5rem;
+    }
+    .ai-os-header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .ai-os-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(31, 217, 254, 0.1);
+      border: 1px solid rgba(31, 217, 254, 0.3);
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.75rem;
+    }
+    .ai-os-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+    .ai-os-subtitle {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      max-width: 700px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+    .ai-os-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      background: var(--bg-secondary);
+      border-radius: 15px;
+      padding: 25px;
+      border: 1px solid var(--border-color);
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .flip-card {
+      perspective: 1000px;
+      cursor: pointer;
+    }
+    .flip-card.third { grid-column: span 2; }
+    .flip-card.half { grid-column: span 3; }
+    .flip-card.full { grid-column: span 6; }
+    .flip-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 162px;
+      transition: transform 0.5s ease;
+      transform-style: preserve-3d;
+    }
+    .flip-card.half .flip-card-inner { min-height: 150px; }
+    .flip-card.full .flip-card-inner { min-height: 112px; }
+    .flip-card.flipped .flip-card-inner {
+      transform: rotateY(180deg);
+    }
+    .flip-card-front,
+    .flip-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: var(--bg-card);
+    }
+    .flip-card-front {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .flip-card-back {
+      transform: rotateY(180deg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--bg-card) 0%, rgba(31, 217, 254, 0.08) 100%);
+      border-color: rgba(31, 217, 254, 0.2);
+    }
+    .flip-card:hover .flip-card-front,
+    .flip-card:hover .flip-card-back {
+      border-color: rgba(31, 217, 254, 0.3);
+    }
+    .flip-card.highlighted .flip-card-front {
+      background: rgba(31, 217, 254, 0.06);
+      border-color: rgba(31, 217, 254, 0.2);
+    }
+    .component-icon {
+      width: 50px;
+      height: 50px;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(31, 217, 254, 0.1);
+      border-radius: 10px;
+    }
+    .component-icon .material-icons {
+      font-size: 28px;
+      color: var(--accent-primary);
+    }
+    .flip-card.half .component-icon,
+    .flip-card.full .component-icon {
+      width: 58px;
+      height: 58px;
+    }
+    .flip-card.half .component-icon .material-icons,
+    .flip-card.full .component-icon .material-icons {
+      font-size: 32px;
+    }
+    .component-name {
+      font-size: 1.19rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 5px;
+    }
+    .component-tagline {
+      font-size: 0.94rem;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .component-features {
+      font-size: 0.81rem;
+      color: var(--text-muted);
+    }
+    .back-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .usage-badge {
+      position: absolute;
+      top: -10px;
+      right: 15px;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      color: white;
+      background: var(--accent-primary);
+      z-index: 5;
+    }
+    
+    /* Pipeline Section */
+    .section-title { display: flex; align-items: center; gap: 0.5rem; font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .section-title .material-icons { color: var(--accent-primary); font-size: 20px; }
+    .section-subtitle {
+      display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);
+      background: var(--bg-card); padding: 0.5rem 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent-primary);
+      margin-bottom: 1rem;
+    }
+    .section-subtitle .material-icons { font-size: 16px; color: var(--accent-primary); }
+    
+    /* Pipeline Section */
+    .pipeline-section {
+      background: var(--bg-secondary); border-radius: 12px; padding: 1rem;
+      border: 1px solid var(--border-color);
+    }
+    .pipeline-flow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; padding: 0.5rem 0; }
+    .component-box {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 0.75rem; min-width: 100px; text-align: center;
+    }
+    .component-box:hover { border-color: rgba(115, 200, 253, 0.4); background: var(--bg-card-hover); }
+    .component-box .component-icon { margin-bottom: 0.5rem; }
+    .component-box .component-icon .material-icons { font-size: 28px; color: var(--accent-primary); }
+    .component-box .component-title { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .component-box .component-desc { font-size: 0.65rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .component-box .component-badge {
+      display: inline-block; padding: 0.15rem 0.4rem; background: var(--bg-secondary);
+      border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.55rem; color: var(--text-secondary);
+    }
+    .component-box .component-badge.nim { border-color: #76b900; color: #76b900; }
+    .arrow-right {
+      width: 24px; height: 2px; background: linear-gradient(90deg, rgba(115,200,253,0.4), rgba(115,200,253,0.6));
+      position: relative; flex-shrink: 0;
+    }
+    .arrow-right::after {
+      content: ''; position: absolute; right: -4px; top: -3px; width: 0; height: 0;
+      border-left: 6px solid rgba(115,200,253,0.6); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+    }
+    
+    @media (max-width: 900px) {
+      .ai-os-grid {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+      }
+      .flip-card.third, .flip-card.half, .flip-card.full { grid-column: span 1; }
+      .pipeline-flow { flex-direction: column; }
+      .arrow-right { width: 2px; height: 20px; transform: rotate(90deg); }
+    }
+    @media (max-width: 768px) {
+      .header { padding: 1rem 1.5rem; }
+      .page-content { padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo-section">
+      <svg class="vast-logo" viewBox="0 0 68 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12.992 1.78967L12.1608 1.41053C11.7075 1.18305 11.103 1.41053 10.8763 1.8655L10.6496 2.32046L7.17388 9.90322L3.69812 2.32046L3.47144 1.8655C3.24476 1.41053 2.71584 1.18305 2.18692 1.41053L1.35577 1.78967C0.902406 2.01715 0.675724 2.62377 0.902404 3.07874L1.12908 3.45788L5.88936 13.6946C6.11604 14.2254 6.64496 14.5287 7.17388 14.5287C7.7028 14.5287 8.23172 14.2254 8.4584 13.6946L13.2187 3.45788L13.4454 3.07874C13.672 2.54795 13.4454 1.94132 12.992 1.78967Z" fill="#E8EBEC"/>
+        <path d="M32.411 12.4054L27.5752 2.09289C27.3485 1.5621 26.8196 1.25879 26.2906 1.25879C25.7617 1.25879 25.2328 1.5621 25.0061 2.09289L20.2458 12.3296L20.0192 12.7088C19.7925 13.2395 20.0192 13.8462 20.5481 14.0736L21.3792 14.4528C21.8326 14.6803 22.4371 14.4528 22.6638 13.9978L22.8904 13.5429L26.3662 5.9601L29.842 13.5429L30.0686 13.9978C30.2953 14.4528 30.8242 14.6803 31.3532 14.4528L32.1843 14.0736C32.6377 13.8462 32.8644 13.2395 32.6377 12.7846L32.411 12.4054Z" fill="#E8EBEC"/>
+        <path d="M49.0338 1.25879H48.5805H43.0646H42.9891C41.5534 1.33462 39.3622 2.3962 39.3622 4.89851C39.3622 7.47665 41.4779 8.61406 42.6868 8.84155L45.5581 9.52399C45.6337 9.52399 45.6337 9.52399 45.7092 9.52399C45.8603 9.52399 46.6159 9.67565 46.6159 10.5856C46.6159 11.1164 46.3893 11.4197 45.8603 11.4955H40.3445H39.9667C39.4377 11.4955 38.9844 11.8746 38.9844 12.4054V13.3154C38.9844 13.8462 39.3622 14.3011 39.8911 14.377H40.3445H45.8603C45.9359 14.377 45.9359 14.377 46.0115 14.377C47.3715 14.2253 49.3361 13.1637 49.3361 10.6614C49.3361 8.08327 47.2204 7.02169 46.087 6.7942L43.2157 6.11175C43.2157 6.11175 43.2157 6.11175 43.1402 6.11175C43.0646 6.11175 42.0823 5.88427 42.0823 4.97434C42.0823 4.36772 42.6868 4.21607 43.0646 4.14024H48.5049H48.9583C49.4872 4.14024 49.9406 3.7611 49.9406 3.23031V2.32038C49.9406 1.78958 49.5628 1.33462 49.0338 1.25879Z" fill="#E8EBEC"/>
+        <path d="M67.0178 1.33462H66.5645H57.7995L57.2706 1.25879C56.7417 1.25879 56.2883 1.63793 56.2883 2.16872V3.07865C56.2883 3.60944 56.7417 4.06441 57.2706 4.06441H57.9507H60.7464V12.9362V13.3912C60.7464 13.922 61.1242 14.377 61.6531 14.377H62.5598C63.0887 14.377 63.5421 13.922 63.5421 13.3912V12.9362V4.06441H66.3378H67.0178C67.5468 4.06441 68.0001 3.60944 68.0001 3.07865V2.24455C68.0001 1.71375 67.5468 1.33462 67.0178 1.33462Z" fill="#E8EBEC"/>
+      </svg>
+      <div>
+        <div class="header-title">Video Search & Summarization</div>
+        <div class="header-subtitle">DataEngine Blueprint</div>
+      </div>
+    </div>
+    <a href="/" class="back-link"><span class="material-icons">arrow_back</span> Back to Videos</a>
+  </header>
+
+  <div class="page-content">
+    <div class="blueprint-container">
+      
+      <!-- VAST AI Operating System -->
+      <section class="ai-os-section">
+        <div class="ai-os-header">
+          <div class="ai-os-badge">
+            <span class="material-icons" style="font-size: 14px;">verified</span>
+            VAST AI Operating System
+          </div>
+          <h2 class="ai-os-title">The Foundation</h2>
+          <p class="ai-os-subtitle">One unified platform for storage, compute, vector search, and AI. All 100% on VAST — eliminating integration complexity and vendor sprawl.</p>
+        </div>
+
+        <div class="ai-os-grid" id="ai-os-grid">
+          <!-- Row 1: Compute Engines (3 equal cards) -->
+          <div class="flip-card third highlighted" onclick="flipCard(this, event)">
+            <span class="usage-badge">ALL</span>
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <div class="component-icon">
+                  <span class="material-icons">settings</span>
+                </div>
+                <div class="component-name">DataEngine</div>
+                <div class="component-tagline">Event-Driven Computing</div>
+                <div class="component-features">Triggers, Functions, Containers</div>
+              </div>
+              <div class="flip-card-back">
+                <div class="back-description">Orchestrates all pipeline workflows. Triggers video ingestion, genomic analysis, fraud detection jobs, and RAG indexing through event-driven functions and containers.</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flip-card third" onclick="flipCard(this, event)">
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <div class="component-icon">
+                  <span class="material-icons">hub</span>
+                </div>
+                <div class="component-name">AgentEngine</div>
+                <div class="component-tagline">Agent Orchestration</div>
+                <div class="component-features">AI Agents, Workflows</div>
+              </div>
+              <div class="flip-card-back">
+                <div class="back-description">Powers the Research Assistant with autonomous AI agents that reason, plan, and execute multi-step research tasks using tool orchestration.</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flip-card third highlighted" onclick="flipCard(this, event)">
+            <span class="usage-badge">RAG</span>
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <div class="component-icon">
+                  <span class="material-icons">insights</span>
+                </div>
+                <div class="component-name">InsightEngine</div>
+                <div class="component-tagline">Real-Time RAG</div>
+                <div class="component-features">Knowledge Retrieval, Reranking</div>
+              </div>
+              <div class="flip-card-back">
+                <div class="back-description">Enables semantic search in VSS (video moments) and Research Assistant (document knowledge). Performs retrieval, reranking, and context augmentation for LLM responses.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 2: Storage Layer (2 equal cards) -->
+          <div class="flip-card half" onclick="flipCard(this, event)">
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <div class="component-icon">
+                  <span class="material-icons">dns</span>
+                </div>
+                <div class="component-name">DataStore</div>
+                <div class="component-tagline">Universal Storage</div>
+                <div class="component-features">NFS, SMB, S3, NVMe/TCP, CSI, vLLM</div>
+              </div>
+              <div class="flip-card-back">
+                <div class="back-description">Stores video files, genomic sequences (FASTQ/BAM), research documents, and transaction logs. Provides unified S3/NFS access for all pipeline data with vLLM model serving.</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flip-card half highlighted" onclick="flipCard(this, event)">
+            <span class="usage-badge">VECTOR</span>
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <div class="component-icon">
+                  <span class="material-icons">grid_view</span>
+                </div>
+                <div class="component-name">DataBase</div>
+                <div class="component-tagline">Analytical Data Warehouse</div>
+                <div class="component-features">SQL, Spark/Trino, ADBC, Python, Vector Search</div>
+              </div>
+              <div class="flip-card-back">
+                <div class="back-description">Stores vector embeddings for video frames, genomic variants, and documents. Enables similarity search via native vector indexes. Powers fraud analytics with SQL/Spark queries.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3: Foundation (full width) -->
+          <div class="flip-card full" onclick="flipCard(this, event)">
+            <div class="flip-card-inner">
+              <div class="flip-card-front">
+                <div class="component-icon">
+                  <span class="material-icons">public</span>
+                </div>
+                <div class="component-name">DataSpace</div>
+                <div class="component-tagline">Globally-Distributed Data Computing</div>
+              </div>
+              <div class="flip-card-back">
+                <div class="back-description">Foundation layer enabling global data distribution. Allows blueprints to scale across regions with consistent data access, replication, and compute locality.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Ingestion Pipeline -->
+      <section class="pipeline-section">
+        <div class="section-title"><span class="material-icons">download</span> Ingestion Pipeline</div>
+        <div class="section-subtitle"><span class="material-icons">info</span> Video → S3 → Trigger → Segment → Reason → Embed → VastDB</div>
+        
+        <div class="pipeline-flow">
+          <div class="component-box"><div class="component-icon"><span class="material-icons">video_library</span></div><div class="component-title">Video Sources</div><div class="component-desc">Upload / S3</div><div class="component-badge">S3</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">storage</span></div><div class="component-title">VAST S3</div><div class="component-desc">Object store</div><div class="component-badge">S3</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">bolt</span></div><div class="component-title">Trigger</div><div class="component-desc">On upload</div><div class="component-badge">DataEngine</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">content_cut</span></div><div class="component-title">Video Segmenter</div><div class="component-desc">Split segments</div><div class="component-badge">Serverless</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">psychology</span></div><div class="component-title">Video Reasoner</div><div class="component-desc">NVIDIA Cosmos VLM</div><div class="component-badge nim">NIM</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">transform</span></div><div class="component-title">Video Embedder</div><div class="component-desc">Vectors</div><div class="component-badge nim">NIM</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">save</span></div><div class="component-title">Ingest to VastDB</div><div class="component-desc">Vectors + metadata</div><div class="component-badge">Serverless</div></div>
+        </div>
+      </section>
+
+      <!-- Retrieval & Search -->
+      <section class="pipeline-section">
+        <div class="section-title"><span class="material-icons">search</span> Retrieval & Search</div>
+        <div class="section-subtitle"><span class="material-icons">info</span> Query → Embed → Vector search → LLM → Results</div>
+        
+        <div class="pipeline-flow">
+          <div class="component-box"><div class="component-icon"><span class="material-icons">edit_note</span></div><div class="component-title">User Query</div><div class="component-desc">Natural language</div><div class="component-badge">Prompt</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">psychology</span></div><div class="component-title">Text Embedding</div><div class="component-desc">Query → vector</div><div class="component-badge nim">NIM</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">merge_type</span></div><div class="component-title">Hybrid Search</div><div class="component-desc">Vector + metadata</div><div class="component-badge">ADBC</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">storage</span></div><div class="component-title">VastDB Query</div><div class="component-desc">Vector search</div><div class="component-badge">VastDB</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">auto_awesome</span></div><div class="component-title">LLM Synthesis</div><div class="component-desc">Summarize</div><div class="component-badge nim">NIM</div></div>
+          <div class="arrow-right"></div>
+          <div class="component-box"><div class="component-icon"><span class="material-icons">video_library</span></div><div class="component-title">Video Results</div><div class="component-desc">Segments</div><div class="component-badge">UI</div></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+  <script>
+    function flipCard(card, event) {
+      event.stopPropagation();
+      document.querySelectorAll('.flip-card.flipped').forEach(c => {
+        if (c !== card) c.classList.remove('flipped');
+      });
+      card.classList.toggle('flipped');
+    }
+
+    document.addEventListener('click', function(event) {
+      const grid = document.getElementById('ai-os-grid');
+      if (grid && !grid.contains(event.target)) {
+        document.querySelectorAll('.flip-card.flipped').forEach(c => c.classList.remove('flipped'));
+      }
+    });
+  </script>
+</body>
+</html>
