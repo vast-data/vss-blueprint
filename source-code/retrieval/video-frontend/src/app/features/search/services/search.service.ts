@@ -85,7 +85,7 @@ export class SearchService {
       this.state.update(s => ({
         ...s,
         loading: false,
-        error: error.error?.detail || 'Search failed. Please try again.',
+        error: this.getErrorMessage(error),
         animationPhase: 'idle'
       }));
     }
@@ -115,6 +115,38 @@ export class SearchService {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private getErrorMessage(error: any): string {
+    const detail = error?.error?.detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const parts = detail
+        .map((d: any) => {
+          if (!d || typeof d !== 'object') {
+            return '';
+          }
+          const msg = typeof d.msg === 'string' ? d.msg : '';
+          const loc = Array.isArray(d.loc) ? d.loc.join('.') : '';
+          return msg ? (loc ? `${loc}: ${msg}` : msg) : '';
+        })
+        .filter((p: string) => !!p);
+      if (parts.length > 0) {
+        return parts.join(' | ');
+      }
+    }
+
+    if (typeof error?.error === 'string' && error.error.trim()) {
+      return error.error;
+    }
+    if (typeof error?.message === 'string' && error.message.trim()) {
+      return error.message;
+    }
+
+    return 'Search failed. Please try again.';
   }
 }
 

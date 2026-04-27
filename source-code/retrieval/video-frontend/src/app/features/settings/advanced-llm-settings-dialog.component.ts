@@ -16,8 +16,16 @@ export const LLM_SETTINGS_STORAGE_KEY = 'video_lab_llm_settings';
 /** Max value for search top_k (must match backend VideoSearchRequest.top_k le=100) */
 export const MAX_SEARCH_RESULTS = 100;
 
+/** Max segments sent to LLM synthesis (must match backend VideoSearchRequest.llm_top_n le=100) */
+export const MAX_LLM_ANALYSIS_COUNT = 100;
+
+/** Discrete choices for LLM Analysis Count (must be ≤ MAX_LLM_ANALYSIS_COUNT) */
+export const LLM_ANALYSIS_COUNT_OPTIONS = [
+  3, 5, 10, 15, 20, 30, 50, 100
+] as const;
+
 export interface LLMSettings {
-  llmTopNSummaries: number;    // How many results sent to LLM (3, 5, 10)
+  llmTopNSummaries: number;    // How many results sent to LLM (see LLM_ANALYSIS_COUNT_OPTIONS, max MAX_LLM_ANALYSIS_COUNT)
   searchTopK: number;          // Max search results from VastDB (1, 3, 5, 10, 15, or MAX_SEARCH_RESULTS)
   minSimilarityScore: number;  // Minimum similarity threshold (0.1 - 0.8)
 }
@@ -28,12 +36,33 @@ export const DEFAULT_LLM_SETTINGS: LLMSettings = {
   minSimilarityScore: 0.1
 };
 
+/** Snap stored value to an allowed option so mat-select never shows blank after upgrades. */
+function normalizeLlmTopNSummaries(n: unknown): number {
+  let raw: number;
+  if (typeof n === 'number' && !Number.isNaN(n)) {
+    raw = n;
+  } else if (typeof n === 'string' && n.trim() !== '' && !Number.isNaN(Number(n))) {
+    raw = Number(n);
+  } else {
+    raw = DEFAULT_LLM_SETTINGS.llmTopNSummaries;
+  }
+  const clamped = Math.min(Math.max(1, raw), MAX_LLM_ANALYSIS_COUNT);
+  const opts = LLM_ANALYSIS_COUNT_OPTIONS as readonly number[];
+  if (opts.includes(clamped)) {
+    return clamped;
+  }
+  const nextUp = opts.find((o) => o >= clamped);
+  return nextUp ?? opts[opts.length - 1];
+}
+
 // Helper function to get settings (can be used by other components)
 export function getLLMSettings(): LLMSettings {
   const stored = localStorage.getItem(LLM_SETTINGS_STORAGE_KEY);
   if (stored) {
     try {
-      return { ...DEFAULT_LLM_SETTINGS, ...JSON.parse(stored) };
+      const merged = { ...DEFAULT_LLM_SETTINGS, ...JSON.parse(stored) } as LLMSettings;
+      merged.llmTopNSummaries = normalizeLlmTopNSummaries(merged.llmTopNSummaries);
+      return merged;
     } catch {
       return DEFAULT_LLM_SETTINGS;
     }
@@ -79,16 +108,16 @@ export function getLLMSettings(): LLMSettings {
           <div class="setting-label">
             <span class="label-text">LLM Analysis Count</span>
             <button mat-icon-button class="info-btn"
-                    matTooltip="Number of top search results sent to the LLM for analysis and response synthesis. Only applies when 'Enable LLM Response' toggle is enabled. Higher values provide more context but may increase response time."
+                    matTooltip="Number of top search results sent to the LLM for analysis and response synthesis. Only applies when 'Enable LLM Response' toggle is enabled. Higher values provide more context but increase payload size, latency, and token usage (max {{ maxLlmAnalysisCount }})."
                     matTooltipPosition="right">
               <mat-icon>info_outline</mat-icon>
             </button>
           </div>
           <mat-form-field appearance="outline" class="setting-field">
             <mat-select [(ngModel)]="settings.llmTopNSummaries">
-              <mat-option [value]="3">3 results</mat-option>
-              <mat-option [value]="5">5 results</mat-option>
-              <mat-option [value]="10">10 results</mat-option>
+              @for (n of llmAnalysisCountOptions; track n) {
+                <mat-option [value]="n">{{ n }} results</mat-option>
+              }
             </mat-select>
           </mat-form-field>
         </div>
@@ -444,6 +473,11 @@ export class AdvancedLLMSettingsDialogComponent implements OnInit {
   /** Max search results value (matches backend limit); used in template for "Max" option */
   maxSearchResults = MAX_SEARCH_RESULTS;
 
+  /** Max segments for LLM synthesis (matches backend llm_top_n cap) */
+  maxLlmAnalysisCount = MAX_LLM_ANALYSIS_COUNT;
+
+  llmAnalysisCountOptions = [...LLM_ANALYSIS_COUNT_OPTIONS];
+
   settings: LLMSettings = { ...DEFAULT_LLM_SETTINGS };
 
   ngOnInit() {
@@ -471,6 +505,8 @@ export class AdvancedLLMSettingsDialogComponent implements OnInit {
       });
       this.settings.llmTopNSummaries = Math.min(this.settings.llmTopNSummaries, this.settings.searchTopK);
     }
+
+    this.settings.llmTopNSummaries = normalizeLlmTopNSummaries(this.settings.llmTopNSummaries);
 
     localStorage.setItem(LLM_SETTINGS_STORAGE_KEY, JSON.stringify(this.settings));
     this.snackBar.open('Settings saved!', 'OK', {

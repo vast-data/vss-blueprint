@@ -6,7 +6,7 @@ The backend no longer requires a ConfigMap for the system prompt.
 """
 import httpx
 import time
-import os
+import re
 from typing import List, Dict, Optional
 from src.config import get_settings
 
@@ -42,9 +42,14 @@ class LLMService:
             print(f"[LLM] Using NVIDIA Cloud: {self.base_url}")
         self.model_name = self.settings.llm_model_name
         self.timeout = self.settings.llm_timeout_seconds
+        self.max_tokens = self.settings.llm_max_tokens
+        self.max_continuations = self.settings.llm_max_continuations
         # Default prompt is only used as fallback if frontend doesn't send one
         self.default_prompt = DEFAULT_SYSTEM_PROMPT
-        print(f"[LLM] Service initialized (prompt will be provided by frontend)")
+        print(
+            f"[LLM] Service initialized (prompt from frontend, max_tokens={self.max_tokens}, "
+            f"max_continuations={self.max_continuations})"
+        )
     
     def synthesize_search_results(
         self, 
@@ -86,13 +91,15 @@ class LLMService:
         # Prepare summaries for LLM
         summaries_text = self._format_summaries(top_results[:top_n])
         
-        # Construct user message
+        # Construct user message (adds deterministic counting instructions when user asks for logo totals)
+        counting_instructions = self._get_counting_mode_instructions(query)
         user_message = f"""User Query: {query}
 
 Video Segment Summaries:
 {summaries_text}
 
-Please synthesize this information to answer the user's query."""
+Please synthesize this information to answer the user's query.
+{counting_instructions}"""
         
         try:
             # Call NVIDIA API with the effective system prompt
@@ -186,41 +193,93 @@ Please synthesize this information to answer the user's query."""
         if not self.settings.llm_local_nim and self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": effective_system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
-            "temperature": 0.2,
-            "top_p": 0.7,
-            "max_tokens": 300,
-            "stream": False
-        }
-        
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # Extract content and token usage
-            content = ""
-            if "choices" in data and len(data["choices"]) > 0:
-                content = data["choices"][0].get("message", {}).get("content", "")
-            
-            tokens_used = data.get("usage", {}).get("total_tokens", 0)
-            
-            return {
-                "content": content,
-                "tokens_used": tokens_used
+        messages = [
+            {
+                "role": "system",
+                "content": effective_system_prompt
+            },
+            {
+                "role": "user",
+                "content": user_message
             }
+        ]
+
+        all_content_parts: List[str] = []
+        total_tokens_used = 0
+        max_rounds = max(0, int(self.max_continuations)) + 1
+        finish_reason = None
+
+        with httpx.Client(timeout=self.timeout) as client:
+            for round_idx in range(max_rounds):
+                payload = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "top_p": 0.7,
+                    "max_tokens": self.max_tokens,
+                    "stream": False
+                }
+                response = client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+
+                data = response.json()
+                choices = data.get("choices", [])
+                if not choices:
+                    raise RuntimeError("No choices in LLM API response")
+
+                first_choice = choices[0]
+                content_part = first_choice.get("message", {}).get("content", "") or ""
+                finish_reason = first_choice.get("finish_reason")
+                total_tokens_used += data.get("usage", {}).get("total_tokens", 0)
+
+                if content_part:
+                    all_content_parts.append(content_part)
+
+                hit_token_limit = finish_reason in ("length", "max_tokens")
+                if not hit_token_limit:
+                    break
+
+                if round_idx >= max_rounds - 1:
+                    break
+
+                # Ask the model to continue seamlessly in the next chunk.
+                messages.append({"role": "assistant", "content": content_part})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Continue exactly where you stopped. Do not restart or repeat prior lines. "
+                        "Return only the remaining continuation."
+                    )
+                })
+
+        return {
+            "content": "".join(all_content_parts).strip(),
+            "tokens_used": total_tokens_used
+        }
+
+    def _get_counting_mode_instructions(self, query: str) -> str:
+        """Add strict instructions for counting/summing logo detections when query asks for totals."""
+        query_lower = query.lower()
+        asks_for_count = bool(
+            re.search(r"\b(how many|count|total|sum|in total)\b", query_lower)
+        )
+        asks_about_logos = bool(
+            re.search(r"\b(logo|logos|under armour|under_armour|ua|nike|adidas|brand)\b", query_lower)
+        )
+
+        if not (asks_for_count and asks_about_logos):
+            return ""
+
+        return """
+
+COUNTING MODE (STRICT):
+- The user is asking for logo totals. Prioritize arithmetic correctness over style.
+- Use only explicit numeric evidence from each segment summary (especially JSON fields like count/detections if present).
+- Compute final total as the sum across analyzed segments; show the arithmetic briefly.
+- Do not invent detections or add speculative counts.
+- If confidence is mixed, provide: (1) conservative confirmed total, (2) possible upper bound.
+- Keep answer concise and start with the total count sentence.
+"""
 
 
 # Global LLM service instance
