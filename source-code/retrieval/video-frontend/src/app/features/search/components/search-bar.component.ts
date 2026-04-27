@@ -39,15 +39,15 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
   template: `
     <div class="search-bar-container">
       <form [formGroup]="searchForm" (ngSubmit)="onSearch()" class="search-form">
-        <!-- LLM toggle (sparkle when on, star outline when off) - left of search input -->
+        <!-- LLM synthesis toggle — full pill is clickable -->
         <button
           type="button"
-          class="llm-star-button"
+          class="llm-pill-button"
           [class.active]="searchForm.get('useLlm')?.value"
           (click)="searchForm.patchValue({ useLlm: !searchForm.get('useLlm')?.value })"
-          matTooltip="Enable LLM Response"
-          mat-icon-button>
+          [matTooltip]="searchForm.get('useLlm')?.value ? 'Disable' : 'Enable'">
           <mat-icon>{{ searchForm.get('useLlm')?.value ? 'auto_awesome' : 'psychology' }}</mat-icon>
+          <span class="pill-label">LLM Synthesys</span>
         </button>
         <!-- Main Search Field - Native HTML -->
         <div class="custom-search-field">
@@ -114,12 +114,12 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
           </div>
         </div>
         <div class="upload-center">
-          <button mat-icon-button
-                  type="button"
-                  class="upload-icon-btn"
+          <button type="button"
+                  class="upload-pill-button"
                   (click)="uploadClick.emit()"
                   matTooltip="Upload video">
             <mat-icon>cloud_upload</mat-icon>
+            <span class="pill-label">Upload</span>
           </button>
         </div>
         <div class="advanced-filters-toggle">
@@ -353,21 +353,59 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
       align-items: stretch;
       margin-bottom: 1.5rem;
 
-      .llm-star-button {
+      .llm-pill-button {
         flex-shrink: 0;
         align-self: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.2rem;
+        min-width: 5.5rem;
+        padding: 0.45rem 0.65rem;
+        margin: 0;
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        background: var(--bg-secondary);
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+
         mat-icon {
-          font-size: 1.5rem;
-          width: 1.5rem;
-          height: 1.5rem;
+          font-size: 1.35rem;
+          width: 1.35rem;
+          height: 1.35rem;
           color: var(--text-secondary);
           transition: color 0.2s ease;
         }
-        &:hover mat-icon {
-          color: var(--text-primary);
+        .pill-label {
+          font-size: 0.65rem;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          color: var(--text-secondary);
+          line-height: 1.1;
+          text-align: center;
+          max-width: 6rem;
         }
-        &.active mat-icon {
-          color: var(--color-lightblue-400);
+        &:hover {
+          background: var(--bg-card-hover);
+          border-color: var(--border-hover);
+          mat-icon {
+            color: var(--text-primary);
+          }
+          .pill-label {
+            color: var(--text-primary);
+          }
+        }
+        &.active {
+          border-color: var(--color-lightblue-400);
+          background: rgba(115, 200, 253, 0.08);
+          mat-icon {
+            color: var(--color-lightblue-400);
+          }
+          .pill-label {
+            color: var(--color-lightblue-400);
+          }
         }
       }
     }
@@ -583,12 +621,41 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
       transition: border-color 0.3s ease;
     }
 
-    .upload-icon-btn {
+    .upload-pill-button {
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.2rem;
+      min-width: 4.5rem;
+      padding: 0.45rem 0.65rem;
+      margin: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: var(--bg-secondary);
       color: var(--accent-primary);
-    }
-    .upload-icon-btn:hover {
-      background: rgba(115, 200, 253, 0.15);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s ease, border-color 0.2s ease;
+
+      mat-icon {
+        font-size: 1.35rem;
+        width: 1.35rem;
+        height: 1.35rem;
+        color: var(--accent-primary);
+      }
+      .pill-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--accent-primary);
+        line-height: 1.1;
+      }
+      &:hover {
+        background: rgba(115, 200, 253, 0.15);
+        border-color: var(--border-hover);
+      }
     }
 
     .time-filter {

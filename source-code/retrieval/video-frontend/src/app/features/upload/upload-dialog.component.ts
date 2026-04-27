@@ -1,13 +1,12 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { VideoService } from '../../shared/services/video.service';
-import { UploadRequest } from '../../shared/models/video.model';
 
 @Component({
   selector: 'app-upload-dialog',
@@ -25,7 +24,7 @@ import { UploadRequest } from '../../shared/models/video.model';
     <div class="upload-dialog-container">
       <h2 mat-dialog-title>
         <mat-icon>cloud_upload</mat-icon>
-        Upload Video
+        Upload Videos
       </h2>
 
       <mat-dialog-content>
@@ -36,16 +35,30 @@ import { UploadRequest } from '../../shared/models/video.model';
                  (dragover)="onDragOver($event)"
                  (dragleave)="onDragLeave($event)"
                  (drop)="onDrop($event)"
-                 (click)="fileInput.click()">
+                 (click)="openFilePicker($event, fileInput)">
               <mat-icon class="upload-icon">video_file</mat-icon>
               <p class="drop-text">
-                @if (!selectedFile()) {
-                  Drag & drop video file here or click to browse
+                @if (selectedFiles().length === 0) {
+                  Drag & drop videos here or click to browse
                 } @else {
-                  {{ selectedFile()?.name }}
+                  Add more (up to {{ maxFiles }} total)
                 }
               </p>
-              <input #fileInput type="file" hidden accept="video/mp4,.mp4,video/quicktime,.mov,video/webm,.webm,video/x-msvideo,.avi,video/x-matroska,.mkv" (change)="onFileSelected($event)">
+              <p class="drop-hint">Up to {{ maxFiles }} files · {{ maxSizeMb }} MB per file</p>
+              @if (selectedFiles().length > 0) {
+                <ul class="selected-files-list" (click)="$event.stopPropagation()">
+                  @for (file of selectedFiles(); track file.name + '-' + file.size + '-' + $index) {
+                    <li class="file-row">
+                      <span class="file-name" [title]="file.name">{{ file.name }}</span>
+                      <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                      <button type="button" class="remove-file-btn" (click)="removeFile($index); $event.stopPropagation()" matTooltip="Remove">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+              <input #fileInput type="file" multiple hidden accept="video/mp4,.mp4,video/quicktime,.mov,video/webm,.webm,video/x-msvideo,.avi,video/x-matroska,.mkv" (change)="onFileSelected($event)">
             </div>
 
             <div class="form-field-wrapper">
@@ -181,7 +194,7 @@ import { UploadRequest } from '../../shared/models/video.model';
           <div class="upload-complete">
             <mat-icon class="success-icon">check_circle</mat-icon>
             <h3>Upload Successful!</h3>
-            <p>Your video has been uploaded and is being processed by the AI pipeline.</p>
+            <p>Your {{ uploadCount() === 1 ? 'video has' : uploadCount() + ' videos have' }} been uploaded and {{ uploadCount() === 1 ? 'is' : 'are' }} being processed by the AI pipeline.</p>
             <div class="processing-info">
               <div class="info-item">
                 <mat-icon>movie_filter</mat-icon>
@@ -200,7 +213,7 @@ import { UploadRequest } from '../../shared/models/video.model';
                 <span>Storing in VastDB...</span>
               </div>
             </div>
-            <p class="wait-message">Processing takes about 30-60 seconds per video. Your video will be searchable once complete.</p>
+            <p class="wait-message">Processing takes about 30-60 seconds per video. Your videos will be searchable once complete.</p>
           </div>
         }
       </mat-dialog-content>
@@ -296,14 +309,78 @@ import { UploadRequest } from '../../shared/models/video.model';
     .drop-text {
       color: var(--text-primary);
       font-size: 1.1rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.35rem;
       font-weight: 400;
     }
 
     .drop-hint {
       color: var(--text-muted);
-      font-size: 0.875rem;
-      margin: 0;
+      font-size: 0.8rem;
+      margin: 0 0 0.75rem 0;
+    }
+
+    .selected-files-list {
+      list-style: none;
+      margin: 0 0 0.75rem 0;
+      padding: 0;
+      width: 100%;
+      max-height: 180px;
+      overflow-y: auto;
+      text-align: left;
+    }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.6rem;
+      margin-bottom: 0.35rem;
+      background: rgba(0, 71, 171, 0.12);
+      border: 1px solid rgba(0, 71, 171, 0.25);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+
+    .file-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-size {
+      flex-shrink: 0;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .remove-file-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+
+      &:hover {
+        background: rgba(220, 38, 38, 0.2);
+        color: #f87171;
+      }
     }
 
     .form-field-wrapper {
@@ -675,7 +752,14 @@ export class UploadDialogComponent implements OnInit {
     location: ['']
   });
 
-  selectedFile = signal<File | null>(null);
+  /** Max videos per batch; each file max {@link maxBytesPerFile}. */
+  readonly maxFiles = 10;
+  readonly maxSizeMb = 100;
+  private readonly maxBytesPerFile = 100 * 1024 * 1024;
+
+  selectedFiles = signal<File[]>([]);
+  /** Count completed in last successful batch (for success message). */
+  uploadCount = signal(0);
   isDragOver = signal(false);
   uploading = signal(false);
   uploadComplete = signal(false);
@@ -722,56 +806,101 @@ export class UploadDialogComponent implements OnInit {
 
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
-      this.handleFile(files[0]);
+      this.addFiles(Array.from(files));
     }
+  }
+
+  openFilePicker(event: MouseEvent, input: HTMLInputElement) {
+    const target = event.target as HTMLElement;
+    if (target.closest('.selected-files-list')) {
+      return;
+    }
+    input.click();
   }
 
   onFileSelected(event: Event) {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      this.handleFile(input.files[0]);
+      this.addFiles(Array.from(input.files));
     }
+    input.value = '';
   }
 
   /** Extensions allowed at upload; ingest pipeline converts all to MP4 for Cosmos */
   private readonly allowedVideoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
 
-  handleFile(file: File) {
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  removeFile(index: number) {
+    const next = this.selectedFiles().filter((_, i) => i !== index);
+    this.selectedFiles.set(next);
+    this.error.set(null);
+  }
+
+  /** Returns error message if invalid, or null if valid. */
+  private validateVideoFile(file: File): string | null {
     const fileName = file.name.toLowerCase();
     const okByExt = this.allowedVideoExtensions.some(ext => fileName.endsWith(ext));
     const okByType = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/x-matroska'].includes(file.type);
     if (!okByExt && !okByType) {
-      this.error.set('Use MP4, MOV, WebM, AVI, or MKV. Ingest converts to MP4 for Cosmos.');
+      return `"${file.name}": use MP4, MOV, WebM, AVI, or MKV.`;
+    }
+    if (file.size > this.maxBytesPerFile) {
+      return `"${file.name}" exceeds ${this.maxSizeMb} MB limit.`;
+    }
+    return null;
+  }
+
+  /**
+   * Adds files to the selection (append, capped at {@link maxFiles}).
+   * Rejects the whole batch if any file fails validation so the user fixes the selection.
+   */
+  addFiles(incoming: File[]) {
+    if (incoming.length === 0) return;
+
+    const current = this.selectedFiles();
+    let remaining = this.maxFiles - current.length;
+    if (remaining <= 0) {
+      this.error.set(`Maximum ${this.maxFiles} videos allowed. Remove some files to add more.`);
       return;
     }
 
-    // Validate file size (100MB)
-    const maxSize = 100 * 1024 * 1024;
-    if (file.size > maxSize) {
-      this.error.set('File size exceeds 100MB limit');
+    if (incoming.length > remaining) {
+      this.error.set(`Only ${remaining} more file(s) allowed (max ${this.maxFiles} total).`);
       return;
     }
 
-    this.selectedFile.set(file);
+    for (const file of incoming) {
+      const err = this.validateVideoFile(file);
+      if (err) {
+        this.error.set(err);
+        return;
+      }
+    }
+
+    this.selectedFiles.set([...current, ...incoming]);
     this.error.set(null);
   }
 
   canUpload(): boolean {
-    return this.selectedFile() !== null && this.uploadForm.valid;
+    return this.selectedFiles().length > 0 && this.uploadForm.valid;
   }
 
   async upload() {
-    if (!this.canUpload() || !this.selectedFile()) return;
+    const files = this.selectedFiles();
+    if (!this.canUpload() || files.length === 0) return;
 
     this.uploading.set(true);
     this.uploadPhase.set('requesting');
     this.error.set(null);
 
     try {
-      const file = this.selectedFile()!;
       const formValue = this.uploadForm.value;
 
-      // Parse tags and allowed users
       const tags = formValue.tags 
         ? formValue.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t)
         : [];
@@ -780,15 +909,7 @@ export class UploadDialogComponent implements OnInit {
         ? formValue.allowedUsers.split(',').map((u: string) => u.trim()).filter((u: string) => u)
         : [];
 
-      // Upload directly to backend (backend proxies to S3)
-      console.log('Uploading video:', file.name);
-      this.uploadPhase.set('uploading');
-      
-      // NEW LOGIC: isPrivate checkbox → invert to is_public for backend
-      // isPrivate=false → is_public=true (default, public)
-      // isPrivate=true → is_public=false (private)
       const isPublic = !formValue.isPrivate;
-      
       const scenario = formValue.useCustomPrompt ? '' : (formValue.scenario || '');
       
       const metadata = {
@@ -799,19 +920,26 @@ export class UploadDialogComponent implements OnInit {
           ? formValue.customPrompt.trim() 
           : undefined
       };
-      
-      const response = await this.videoService.uploadVideo(
-        file,
-        isPublic,
-        tags,
-        allowedUsers,
-        scenario,
-        metadata
-      ).toPromise();
-      
-      console.log('Upload completed successfully:', response);
 
-      // Success!
+      this.uploadPhase.set('uploading');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        this.uploadPhaseDetail.set(`Uploading ${i + 1} of ${files.length}: ${file.name}`);
+        console.log('Uploading video:', file.name);
+        await this.videoService.uploadVideo(
+          file,
+          isPublic,
+          tags,
+          allowedUsers,
+          scenario,
+          metadata
+        ).toPromise();
+      }
+
+      console.log('Upload completed successfully for', files.length, 'file(s)');
+
+      this.uploadCount.set(files.length);
       this.uploading.set(false);
       this.uploadComplete.set(true);
 
@@ -837,9 +965,7 @@ export class UploadDialogComponent implements OnInit {
     return 'Uploading to VAST...';
   }
 
-  uploadPhaseDetail(): string {
-    return 'Transferring video file to S3 storage';
-  }
+  uploadPhaseDetail = signal('Transferring video files to S3 storage');
 
   close() {
     this.dialogRef.close();
