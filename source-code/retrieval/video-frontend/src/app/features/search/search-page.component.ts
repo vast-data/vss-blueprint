@@ -59,6 +59,9 @@ import { environment } from '../../../environments/environment';
           <h2>Search Results</h2>
           <div class="results-info">
             <span>Found {{ searchService.state().results.length }} videos</span>
+            <span>
+              Showing {{ pageStartIndex() }}-{{ pageEndIndex() }} / {{ searchService.state().results.length }}
+            </span>
             @if (searchService.state().permissionFiltered > 0) {
               <span class="filtered-info">
                 ({{ searchService.state().permissionFiltered }} filtered by permissions)
@@ -77,10 +80,33 @@ import { environment } from '../../../environments/environment';
         }
 
         <div class="results-grid">
-          @for (video of searchService.state().results; track video.source) {
+          @for (video of visibleResults(); track video.source) {
             <app-video-card [video]="video" (play)="playVideo($event)"></app-video-card>
           }
         </div>
+        @if (hasMultiplePages()) {
+          <div class="pagination-container">
+            <button mat-stroked-button class="pagination-btn" [disabled]="!canGoPrev()" (click)="goPrevPage()">
+              <mat-icon>chevron_left</mat-icon>
+              Prev
+            </button>
+            <div class="page-numbers">
+              @for (page of pageNumbers(); track page) {
+                <button
+                  mat-stroked-button
+                  class="page-btn"
+                  [class.active]="page === currentPage()"
+                  (click)="goToPage(page)">
+                  {{ page }}
+                </button>
+              }
+            </div>
+            <button mat-stroked-button class="pagination-btn" [disabled]="!canGoNext()" (click)="goNextPage()">
+              Next
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+        }
       }
 
       @if (hasSearched() && searchService.state().results.length === 0 && !searchService.state().loading) {
@@ -250,6 +276,57 @@ import { environment } from '../../../environments/environment';
       animation: fadeIn 0.5s ease-out;
     }
 
+    .pagination-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .pagination-btn,
+    .page-btn {
+      color: var(--text-primary) !important;
+      border-color: var(--border-color) !important;
+      background: var(--bg-card) !important;
+      transition: all 0.2s ease;
+
+      mat-icon {
+        font-size: 1.1rem;
+        width: 1.1rem;
+        height: 1.1rem;
+      }
+
+      &:hover {
+        border-color: var(--border-hover) !important;
+        background: var(--bg-card-hover) !important;
+      }
+    }
+
+    .pagination-btn {
+      min-width: 96px;
+    }
+
+    .page-numbers {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .page-btn {
+      min-width: 44px;
+      padding: 0 0.5rem;
+
+      &.active {
+        border-color: var(--accent-primary) !important;
+        color: var(--accent-primary) !important;
+        background: var(--bg-secondary) !important;
+      }
+    }
+
     @keyframes fadeIn {
       from {
         opacity: 0;
@@ -291,6 +368,8 @@ import { environment } from '../../../environments/environment';
   `]
 })
 export class SearchPageComponent implements OnInit {
+  private static readonly PAGE_SIZE = 20;
+
   searchService = inject(SearchService);
   dialog = inject(MatDialog);
   authService = inject(AuthService);
@@ -299,6 +378,7 @@ export class SearchPageComponent implements OnInit {
   hasSearched = signal(false);
   exampleQueries = signal<string[]>([]);
   isOpeningDialog = signal(false);
+  currentPage = signal(1);
   private uploadDialogRef: MatDialogRef<UploadDialogComponent> | null = null;
 
   ngOnInit() {
@@ -335,11 +415,72 @@ export class SearchPageComponent implements OnInit {
         this.dialog.closeAll();
       }
     });
+
+    // Keep page index valid when result count changes.
+    effect(() => {
+      const totalPages = this.totalPages();
+      if (this.currentPage() > totalPages) {
+        this.currentPage.set(totalPages);
+      }
+    });
   }
 
   onSearch(request: SearchRequest) {
     this.hasSearched.set(true);
+    this.currentPage.set(1);
     this.searchService.search(request);
+  }
+
+  visibleResults(): VideoSearchResult[] {
+    const start = (this.currentPage() - 1) * SearchPageComponent.PAGE_SIZE;
+    const end = start + SearchPageComponent.PAGE_SIZE;
+    return this.searchService.state().results.slice(start, end);
+  }
+
+  pageStartIndex(): number {
+    const total = this.searchService.state().results.length;
+    if (total === 0) return 0;
+    return (this.currentPage() - 1) * SearchPageComponent.PAGE_SIZE + 1;
+  }
+
+  pageEndIndex(): number {
+    return Math.min(this.currentPage() * SearchPageComponent.PAGE_SIZE, this.searchService.state().results.length);
+  }
+
+  totalPages(): number {
+    const total = this.searchService.state().results.length;
+    return Math.max(1, Math.ceil(total / SearchPageComponent.PAGE_SIZE));
+  }
+
+  hasMultiplePages(): boolean {
+    return this.totalPages() > 1;
+  }
+
+  pageNumbers(): number[] {
+    return Array.from({ length: this.totalPages() }, (_, i) => i + 1);
+  }
+
+  canGoPrev(): boolean {
+    return this.currentPage() > 1;
+  }
+
+  canGoNext(): boolean {
+    return this.currentPage() < this.totalPages();
+  }
+
+  goToPage(page: number) {
+    if (page < 1 || page > this.totalPages()) return;
+    this.currentPage.set(page);
+  }
+
+  goPrevPage() {
+    if (!this.canGoPrev()) return;
+    this.currentPage.update(p => p - 1);
+  }
+
+  goNextPage() {
+    if (!this.canGoNext()) return;
+    this.currentPage.update(p => p + 1);
   }
 
   closeAnimation() {

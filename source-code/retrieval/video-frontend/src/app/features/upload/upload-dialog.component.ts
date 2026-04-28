@@ -753,7 +753,7 @@ export class UploadDialogComponent implements OnInit {
   });
 
   /** Max videos per batch; each file max {@link maxBytesPerFile}. */
-  readonly maxFiles = 10;
+  readonly maxFiles = 100;
   readonly maxSizeMb = 100;
   private readonly maxBytesPerFile = 100 * 1024 * 1024;
 

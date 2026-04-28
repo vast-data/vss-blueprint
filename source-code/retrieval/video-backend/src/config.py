@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     llm_port: int = Field(default=443, description="LLM API port")
     llm_http_scheme: str = Field(default="https", description="LLM HTTP scheme")
     llm_timeout_seconds: int = Field(default=10, description="LLM API timeout in seconds")
+    llm_max_tokens: int = Field(default=1200, description="Max tokens per synthesis completion chunk")
+    llm_max_continuations: int = Field(default=4, description="Extra continuation chunks when response hits token limit")
     llm_local_nim: bool = Field(default=False, description="True = use local NIM (llm_host/port), False = NVIDIA Cloud")
     
     # VAST Admin Credentials (for authenticating local users)
