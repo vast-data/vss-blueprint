@@ -6,7 +6,6 @@ The backend no longer requires a ConfigMap for the system prompt.
 """
 import httpx
 import time
-import re
 from typing import List, Dict, Optional
 from src.config import get_settings
 
@@ -91,15 +90,14 @@ class LLMService:
         # Prepare summaries for LLM
         summaries_text = self._format_summaries(top_results[:top_n])
         
-        # Construct user message (adds deterministic counting instructions when user asks for logo totals)
-        counting_instructions = self._get_counting_mode_instructions(query)
+        # Construct user message from query + segment summaries only.
+        # Custom system prompt from frontend is the single source of synthesis style/rules.
         user_message = f"""User Query: {query}
 
 Video Segment Summaries:
 {summaries_text}
 
-Please synthesize this information to answer the user's query.
-{counting_instructions}"""
+Please synthesize this information to answer the user's query."""
         
         try:
             # Call NVIDIA API with the effective system prompt
@@ -256,31 +254,6 @@ Please synthesize this information to answer the user's query.
             "content": "".join(all_content_parts).strip(),
             "tokens_used": total_tokens_used
         }
-
-    def _get_counting_mode_instructions(self, query: str) -> str:
-        """Add strict instructions for counting/summing logo detections when query asks for totals."""
-        query_lower = query.lower()
-        asks_for_count = bool(
-            re.search(r"\b(how many|count|total|sum|in total)\b", query_lower)
-        )
-        asks_about_logos = bool(
-            re.search(r"\b(logo|logos|under armour|under_armour|ua|nike|adidas|brand)\b", query_lower)
-        )
-
-        if not (asks_for_count and asks_about_logos):
-            return ""
-
-        return """
-
-COUNTING MODE (STRICT):
-- The user is asking for logo totals. Prioritize arithmetic correctness over style.
-- Use only explicit numeric evidence from each segment summary (especially JSON fields like count/detections if present).
-- Compute final total as the sum across analyzed segments; show the arithmetic briefly.
-- Do not invent detections or add speculative counts.
-- If confidence is mixed, provide: (1) conservative confirmed total, (2) possible upper bound.
-- Keep answer concise and start with the total count sentence.
-"""
-
 
 # Global LLM service instance
 _llm_service: Optional[LLMService] = None
