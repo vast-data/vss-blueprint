@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, Inject, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -74,7 +74,8 @@ import { VideoService } from '../../shared/services/video.service';
             [src]="streamUrl()"
             controls
             autoplay
-            (loadeddata)="onVideoLoaded()"
+            playsinline
+            (loadeddata)="onVideoLoaded($event)"
             (error)="onVideoError($event)"
             class="video-player">
             Your browser does not support the video tag.
@@ -491,6 +492,8 @@ export class VideoPlayerComponent implements OnInit {
   private sanitizer = inject(DomSanitizer);
   private dialogRef = inject(MatDialogRef<VideoPlayerComponent>);
 
+  @ViewChild('videoPlayer') private videoPlayerRef?: ElementRef<HTMLVideoElement>;
+
   loading = signal(true);
   error = signal<string | null>(null);
   streamUrl = signal<SafeResourceUrl | null>(null);
@@ -535,9 +538,18 @@ export class VideoPlayerComponent implements OnInit {
     }
   }
 
-  onVideoLoaded() {
+  onVideoLoaded(event?: Event) {
     console.log('[VIDEO PLAYER] Video loaded successfully');
     this.loading.set(false);
+    const el =
+      (event?.target as HTMLVideoElement | undefined) ??
+      this.videoPlayerRef?.nativeElement;
+    if (el) {
+      el.muted = false;
+      el.play().catch(() => {
+        /* autoplay with sound may be blocked until user uses controls */
+      });
+    }
   }
 
   onVideoError(event?: any) {

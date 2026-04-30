@@ -67,13 +67,16 @@ class VideoProcessor:
                     temp_output_path = temp_output.name
                 
                 try:
-                    # Write segment to file
-                    segment_clip.write_videofile(
-                        temp_output_path,
-                        codec=self.output_codec,
-                        audio=False,
-                        logger=None
-                    )
+                    # Write segment to file (preserve AAC audio when present)
+                    has_audio = segment_clip.audio is not None
+                    write_kw = {
+                        "codec": self.output_codec,
+                        "audio": has_audio,
+                        "logger": None,
+                    }
+                    if has_audio:
+                        write_kw["audio_codec"] = "aac"
+                    segment_clip.write_videofile(temp_output_path, **write_kw)
                     
                     # Close the clip immediately after writing and delete reader
                     segment_clip.close()
