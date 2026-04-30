@@ -67,15 +67,18 @@ class VideoProcessor:
                     temp_output_path = temp_output.name
                 
                 try:
-                    # Write segment to file (preserve AAC audio when present)
+                    # Write segment to file (preserve AAC audio; CRF/preset from settings)
                     has_audio = segment_clip.audio is not None
                     write_kw = {
                         "codec": self.output_codec,
                         "audio": has_audio,
                         "logger": None,
+                        "preset": self.settings.ffmpeg_preset,
+                        "ffmpeg_params": ["-crf", str(self.settings.video_crf)],
                     }
                     if has_audio:
                         write_kw["audio_codec"] = "aac"
+                        write_kw["audio_bitrate"] = self.settings.audio_bitrate
                     segment_clip.write_videofile(temp_output_path, **write_kw)
                     
                     # Close the clip immediately after writing and delete reader

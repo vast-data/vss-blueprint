@@ -4,10 +4,14 @@ Video management API endpoints
 import asyncio
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Form, Request, Response
 from fastapi.responses import StreamingResponse
 from src.services.auth_service import CurrentUser
-from src.services.s3_service import get_s3_service
+from src.services.s3_service import (
+    get_s3_service,
+    if_none_match_satisfied,
+    parse_stream_range,
+)
 from src.services.vastdb_service import get_vastdb_service
 from src.config import get_settings
 
@@ -139,28 +143,16 @@ async def upload_video(
 
 @router.get("/stream")
 async def stream_video(
+    request: Request,
     source: str = Query(..., description="S3 source URL (s3://bucket/key)"),
     token: str = Query(..., description="JWT authentication token")
 ):
     """
-    Stream video content proxied through backend
-    
-    This endpoint proxies video from S3 to the browser. The token must be in the URL
-    because HTML5 <video> elements cannot send custom HTTP headers.
-    
-    Why token is needed: Authentication/authorization to verify user has access.
-    Why in URL: HTML5 video element limitation - no custom headers support.
-    Why not just use S3 credentials: Backend has S3 access, but we need to verify
-    which USER is watching (for audit logging and future permission checks).
-    
-    NOTE: Permission filtering happens during similarity search, not here.
-    
-    Args:
-        source: S3 source URL  
-        token: JWT authentication token (required in URL for HTML5 video)
-        
-    Returns:
-        StreamingResponse with video content
+    Stream video content proxied through backend (bytes are not re-encoded; same as S3 object).
+
+    Supports HTTP Range (206) for seeking, ETag + If-None-Match (304), and S3 Content-Type.
+    Quality matches the stored object; tune ingest encoding for fewer artifacts.
+    The token must be in the URL because HTML5 <video> cannot send custom headers.
     """
     from src.services.auth_service import get_current_user_from_token
     
@@ -195,20 +187,62 @@ async def stream_video(
         
         bucket, key = parts
         
-        # Stream video from S3
         s3_service = get_s3_service()
+        meta = s3_service.head_object_for_stream(bucket, key)
+        total_size = meta.content_length
+        range_header = request.headers.get("range")
+        spec = parse_stream_range(range_header, total_size)
+        filename = key.split("/")[-1]
+
+        base_headers = {
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'inline; filename="{filename}"',
+        }
+        if meta.etag:
+            base_headers["ETag"] = meta.etag
+
+        if spec == "full" and if_none_match_satisfied(
+            request.headers.get("if-none-match"), meta.etag
+        ):
+            return Response(
+                status_code=status.HTTP_304_NOT_MODIFIED,
+                headers={k: v for k, v in base_headers.items() if k != "Content-Disposition"},
+            )
+
+        if spec == "unsatisfiable":
+            return Response(
+                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+                headers={"Content-Range": f"bytes */{total_size}"},
+            )
+
+        if isinstance(spec, tuple):
+            start, end = spec
+            content_length = end - start + 1
+            video_stream = s3_service.stream_video_range(bucket, key, start, end)
+            logger.info(
+                f"Partial stream for {current_user.username}: s3://{bucket}/{key} "
+                f"bytes {start}-{end}/{total_size}"
+            )
+            partial_headers = {
+                **base_headers,
+                "Content-Range": f"bytes {start}-{end}/{total_size}",
+                "Content-Length": str(content_length),
+            }
+            return StreamingResponse(
+                video_stream,
+                status_code=status.HTTP_206_PARTIAL_CONTENT,
+                media_type=meta.content_type,
+                headers=partial_headers,
+            )
+
         video_stream = s3_service.stream_video(bucket, key)
-        
         logger.info(f"Streaming video for {current_user.username}: s3://{bucket}/{key}")
-        
-        # Return streaming response
+        full_headers = {**base_headers, "Content-Length": str(total_size)}
         return StreamingResponse(
             video_stream,
-            media_type="video/mp4",
-            headers={
-                "Accept-Ranges": "bytes",
-                "Content-Disposition": f'inline; filename="{key.split("/")[-1]}"'
-            }
+            media_type=meta.content_type,
+            headers=full_headers,
         )
         
     except HTTPException:
@@ -218,6 +252,58 @@ async def stream_video(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to stream video: {str(e)}"
+        )
+
+
+@router.get("/playback-url")
+async def get_playback_presigned_url(
+    source: str = Query(..., description="S3 source URL (s3://bucket/key)"),
+    token: str = Query(..., description="JWT authentication token"),
+    expires_in: int = Query(3600, ge=60, le=86400, description="Presigned URL lifetime (seconds)"),
+):
+    """
+    Return a time-limited S3 presigned GET URL for the same object as /stream.
+
+    Bytes are identical to the proxied stream; use this only if your bucket CORS
+    allows GET from your frontend origin (required for <video src>). Otherwise keep
+    using /videos/stream (now with HTTP Range support).
+    """
+    from src.services.auth_service import get_current_user_from_token
+
+    try:
+        current_user = await get_current_user_from_token(token)
+    except Exception as e:
+        logger.error(f"Authentication failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    try:
+        if not source.startswith("s3://"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid S3 source URL format",
+            )
+        s3_path = source[5:]
+        parts = s3_path.split("/", 1)
+        if len(parts) != 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid S3 URL format. Expected: s3://bucket/key",
+            )
+        bucket, key = parts
+        s3_service = get_s3_service()
+        url = s3_service.generate_download_url(bucket, key, expires_in=expires_in)
+        logger.info(f"Presigned playback URL for {current_user.username}: s3://{bucket}/{key}")
+        return {"url": url, "expires_in": expires_in}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate playback URL: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate playback URL: {str(e)}",
         )
 
 
