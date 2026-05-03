@@ -18,7 +18,8 @@ class Settings(BaseModel):
     output_bucket_suffix: str = "-segments"  # e.g., videos -> videos-segments
     # Higher quality re-encode (lower CRF = larger files, better fidelity; 18 is near-visually lossless for many sources)
     video_crf: int = 18
-    ffmpeg_preset: str = "slow"
+    # Use medium (or faster) for multi-segment jobs: "slow" risks serverless timeouts so only segment 001 completes.
+    ffmpeg_preset: str = "medium"
     audio_bitrate: str = "192k"
     
     @classmethod

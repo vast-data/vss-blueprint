@@ -61,28 +61,12 @@ def handler(ctx, event: VastEvent):
 
             source = f"s3://{bucket}/{key}"
             filename = key.split('/')[-1] if '/' in key else key
-            
-            # Idempotency check: skip if already segmented
             output_bucket = get_output_bucket_name(bucket, ctx.processor.settings.output_bucket_suffix)
-            base_name = filename.rsplit('.', 1)[0]
-            segment_prefix = f"segments/{base_name}_segment_"
-            
-            try:
-                existing_segments = ctx.s3_client.list_objects_prefix(
-                    bucket=output_bucket, 
-                    prefix=segment_prefix, 
-                    max_keys=1
-                )
-                if existing_segments:
-                    ctx.logger.info(f"[SKIP] {filename} already segmented in {output_bucket} (found: {existing_segments[0]})")
-                    return {
-                        "status": "skipped", 
-                        "reason": "Already segmented",
-                        "source": source,
-                        "output_bucket": output_bucket
-                    }
-            except Exception as e:
-                ctx.logger.warning(f"[IDEMPOTENCY] Check failed, proceeding with segmentation: {e}")
+
+            # NOTE: Do not skip based on "any segment object exists" under this video's prefix.
+            # A crash/OOM after uploading only segment_001 made re-invocations skip forever,
+            # so segments 002+ were never created. Duplicate S3 notifications may re-segment
+            # the same source (same keys overwritten); that is acceptable.
 
             with ctx.tracer.start_as_current_span("S3 Download") as download_span:
                 video_content = ctx.s3_client.download_file(bucket, key)

@@ -29,6 +29,29 @@ import uuid
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def build_ytdlp_cmd(args: list) -> list:
+    """
+    Build argv for yt-dlp: JS runtime (Node) + optional Netscape cookies.
+
+    YouTube often returns "Sign in to confirm you're not a bot" for datacenter IPs.
+    Export cookies from a logged-in browser to a file, then set:
+      YTDLP_COOKIES_FILE=/path/to/cookies.txt
+    (Netscape format; e.g. browser extension, or: yt-dlp --cookies-from-browser chrome --print-to-file ...)
+    """
+    cmd = ["yt-dlp", "--js-runtimes", "node"]
+    cookies_path = os.environ.get("YTDLP_COOKIES_FILE") or os.environ.get("YT_DLP_COOKIES_FILE")
+    if cookies_path:
+        if os.path.isfile(cookies_path):
+            cmd.extend(["--cookies", cookies_path])
+        else:
+            logger.warning(
+                "YTDLP_COOKIES_FILE is set but not a readable file (%s) — YouTube may block",
+                cookies_path,
+            )
+    cmd.extend(args)
+    return cmd
+
+
 app = Flask(__name__)
 
 class VideoCaptureService:
@@ -76,18 +99,23 @@ class VideoCaptureService:
                 'best'
             ]
             
+            last_stderr = ""
             for fmt in format_options:
                 logger.info(f"Trying format: {fmt}")
                 
-                cmd = [
-                    'yt-dlp',
-                    '--get-url',
-                    '--format', fmt,
-                    '--no-playlist',  # Don't process playlists
-                    youtube_url
-                ]
+                cmd = build_ytdlp_cmd(
+                    [
+                        "--get-url",
+                        "--format",
+                        fmt,
+                        "--no-playlist",
+                        youtube_url,
+                    ]
+                )
                 
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                if result.stderr:
+                    last_stderr = result.stderr
                 
                 if result.returncode == 0 and result.stdout.strip():
                     stream_url = result.stdout.strip().split('\n')[0]  # Take first URL if multiple
@@ -105,15 +133,19 @@ class VideoCaptureService:
             
             # If all formats returned HLS, try one more thing: force protocol
             logger.info("All formats returned HLS, trying to force https protocol...")
-            cmd = [
-                'yt-dlp',
-                '--get-url',
-                '--format', 'best[height<=720][protocol=https]/best[protocol=https]',
-                '--no-playlist',
-                youtube_url
-            ]
+            cmd = build_ytdlp_cmd(
+                [
+                    "--get-url",
+                    "--format",
+                    "best[height<=720][protocol=https]/best[protocol=https]",
+                    "--no-playlist",
+                    youtube_url,
+                ]
+            )
             
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.stderr:
+                last_stderr = result.stderr
             if result.returncode == 0 and result.stdout.strip():
                 stream_url = result.stdout.strip().split('\n')[0]
                 if '.m3u8' not in stream_url:
@@ -122,12 +154,24 @@ class VideoCaptureService:
             
             # Last resort: Accept HLS but warn
             logger.warning("Could not get direct URL, falling back to HLS (may not work with OpenCV)")
-            cmd = ['yt-dlp', '--get-url', '--format', 'best[height<=720]', youtube_url]
+            cmd = build_ytdlp_cmd(
+                ["--get-url", "--format", "best[height<=720]", youtube_url]
+            )
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.stderr:
+                last_stderr = result.stderr
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip().split('\n')[0]
             
-            logger.error(f"Failed to extract any YouTube stream URL")
+            logger.error("Failed to extract any YouTube stream URL")
+            if last_stderr and (
+                "sign in" in last_stderr.lower() or "not a bot" in last_stderr.lower()
+            ):
+                logger.error(
+                    "YouTube returned a bot check. Server/datacenter IPs are often blocked. "
+                    "Mount Netscape-format cookies and set env YTDLP_COOKIES_FILE. "
+                    "See: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+                )
             return None
                 
         except Exception as e:
@@ -248,10 +292,12 @@ class VideoCaptureService:
     def _capture_with_ytdlp_download(self, config, capture_interval, bucket_name, s3_prefix,
                                      camera_id, capture_type, location, scenario, custom_prompt, max_duration):
         """
-        Fallback method: Use yt-dlp to download segments directly when OpenCV streaming fails.
-        This works around OpenCV's inability to handle complex YouTube URLs.
+        Download time-range segments with yt-dlp (muxed video+audio via merge).
+
+        Used for all YouTube captures (primary path) and as fallback when OpenCV cannot
+        open the stream. OpenCV frame recording has no audio and uses mp4v (lower quality).
         """
-        logger.info("Using yt-dlp download method (OpenCV streaming unavailable)")
+        logger.info("Using yt-dlp segment downloads (muxed video+audio)")
         capture_count = 0
         session_start = time.time()
         
@@ -259,7 +305,7 @@ class VideoCaptureService:
             youtube_url = config['youtube_url']
             
             # Get video info first
-            info_cmd = ['yt-dlp', '--dump-json', '--no-playlist', youtube_url]
+            info_cmd = build_ytdlp_cmd(["--dump-json", "--no-playlist", youtube_url])
             info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=30)
             
             if info_result.returncode != 0:
@@ -268,10 +314,11 @@ class VideoCaptureService:
             
             try:
                 video_info = json.loads(info_result.stdout)
-                duration = video_info.get('duration', 0)
+                raw_dur = video_info.get('duration')
+                duration = float(raw_dur) if raw_dur is not None else 0.0
                 logger.info(f"Video duration: {duration:.1f}s")
-            except:
-                duration = 0
+            except Exception:
+                duration = 0.0
             
             segment_start = 0
             while self.is_running:
@@ -293,17 +340,24 @@ class VideoCaptureService:
                 
                 logger.info(f"Downloading segment #{capture_count + 1}: {filename}")
                 
-                # Download segment using yt-dlp
-                # Use --download-sections to get specific time range
-                ytdlp_cmd = [
-                    'yt-dlp',
-                    '-f', 'best[height<=720][ext=mp4]/best[height<=720][ext=webm]/best[height<=720]',
-                    '--no-playlist',
-                    '--external-downloader', 'ffmpeg',
-                    '--external-downloader-args', f'-ss {segment_start} -t {capture_interval}',
-                    '-o', temp_path,
-                    youtube_url
-                ]
+                # Mux best video + audio (YouTube is often DASH: separate A/V streams).
+                # Cap at 1080p for quality; merge to MP4. FFmpeg cuts the time window.
+                ytdlp_cmd = build_ytdlp_cmd(
+                    [
+                        "-f",
+                        "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                        "--merge-output-format",
+                        "mp4",
+                        "--no-playlist",
+                        "--external-downloader",
+                        "ffmpeg",
+                        "--external-downloader-args",
+                        f"-ss {segment_start} -t {capture_interval}",
+                        "-o",
+                        temp_path,
+                        youtube_url,
+                    ]
+                )
                 
                 result = subprocess.run(ytdlp_cmd, capture_output=True, text=True, timeout=capture_interval + 30)
                 
@@ -395,6 +449,26 @@ class VideoCaptureService:
                 logger.info(f"Scenario: {scenario}")
             if custom_prompt:
                 logger.info(f"Custom Prompt: set ({len(custom_prompt)} chars)")
+            
+            # YouTube: always use yt-dlp (muxed H.264 + AAC). OpenCV only writes video frames
+            # to mp4v with no audio and visibly worse quality.
+            if self.is_youtube_url(stream_url):
+                logger.info(
+                    "YouTube URL: using yt-dlp segment downloads (muxed A/V, up to 1080p); "
+                    "skipping OpenCV frame capture (silent, lower quality)."
+                )
+                return self._capture_with_ytdlp_download(
+                    config,
+                    capture_interval,
+                    bucket_name,
+                    s3_prefix,
+                    camera_id,
+                    capture_type,
+                    location,
+                    scenario,
+                    custom_prompt,
+                    max_duration,
+                )
             
             # Get the actual stream source
             actual_stream_url = self.get_stream_source(stream_url)

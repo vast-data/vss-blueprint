@@ -1,11 +1,14 @@
 FROM python:3.11-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# yt-dlp YouTube extraction often needs a JS runtime (n/challenge scripts). Without Node/Deno,
+# you see "No supported JavaScript runtime" and format extraction fails intermittently.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version
 
 # Set working directory
 WORKDIR /app
