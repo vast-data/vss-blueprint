@@ -73,8 +73,10 @@ import { VideoService } from '../../shared/services/video.service';
             #videoPlayer
             [src]="streamUrl()"
             controls
+            playsinline
             autoplay
-            (loadeddata)="onVideoLoaded()"
+            [muted]="true"
+            (loadedmetadata)="onVideoLoaded()"
             (error)="onVideoError($event)"
             class="video-player">
             Your browser does not support the video tag.

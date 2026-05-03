@@ -16,12 +16,17 @@ class Settings(BaseModel):
     output_codec: str = "libx264"
     output_format: str = "mp4"
     output_bucket_suffix: str = "-segments"  # e.g., videos -> videos-segments
+    # Higher quality re-encode (lower CRF = larger files, better fidelity; 18 is near-visually lossless for many sources)
+    video_crf: int = 18
+    # Use medium (or faster) for multi-segment jobs: "slow" risks serverless timeouts so only segment 001 completes.
+    ffmpeg_preset: str = "medium"
+    audio_bitrate: str = "192k"
     
     @classmethod
-    def from_ctx_secrets(cls, secrets: Dict[str, str]) -> 'Settings':
-        """Load all settings from runtime context secrets"""
-        field_names = cls.__annotations__.keys()
-        config = {field: secrets["videoreasonsecret"][field] for field in field_names}
+    def from_ctx_secrets(cls, secrets: Dict[str, Any]) -> "Settings":
+        """Load settings from runtime context secrets; optional keys use model defaults."""
+        src = secrets["videoreasonsecret"]
+        config = {name: src[name] for name in cls.model_fields if name in src}
         return cls(**config)
 
 

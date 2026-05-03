@@ -3,8 +3,10 @@ S3 service for video uploads and streaming
 """
 import logging
 import boto3
+import re
 from botocore.exceptions import ClientError
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, Iterator, Optional, Tuple, Union, Literal
 import uuid
 from datetime import datetime
 from urllib.parse import quote, unquote
@@ -13,6 +15,43 @@ from src.models.user import User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# S3 → client copy; larger chunks help high-bitrate video (same bytes, less overhead).
+STREAM_CHUNK_SIZE = 256 * 1024
+
+
+@dataclass(frozen=True)
+class S3ObjectStreamMeta:
+    """Head object fields used for video streaming (one HEAD per request)."""
+    content_length: int
+    content_type: str
+    etag: Optional[str]
+
+
+def normalize_etag(etag: str) -> str:
+    """Strip weak prefix and quotes for comparison."""
+    e = etag.strip()
+    if e.upper().startswith("W/"):
+        e = e[2:].strip()
+    if e.startswith('"') and e.endswith('"'):
+        e = e[1:-1]
+    return e
+
+
+def if_none_match_satisfied(header_value: Optional[str], s3_etag: Optional[str]) -> bool:
+    """
+    True if the client If-None-Match value matches the object's ETag (HTTP 304).
+    """
+    if not header_value or not s3_etag:
+        return False
+    hv = header_value.strip()
+    if hv == "*":
+        return False
+    n_s3 = normalize_etag(s3_etag)
+    for part in header_value.split(","):
+        if normalize_etag(part) == n_s3:
+            return True
+    return False
 
 
 class S3Service:
@@ -277,19 +316,29 @@ class S3Service:
             logger.error(f"Error getting object metadata: {str(e)}")
             raise
     
-    def stream_video(self, bucket: str, key: str):
+    def head_object_content_length(self, bucket: str, key: str) -> int:
+        """Return object size in bytes (for Content-Length / Range responses)."""
+        return self.head_object_for_stream(bucket, key).content_length
+
+    def head_object_for_stream(self, bucket: str, key: str) -> S3ObjectStreamMeta:
         """
-        Stream video content from S3 as an iterator
-        
-        This method returns a generator that yields video chunks,
-        suitable for use with FastAPI's StreamingResponse.
-        
-        Args:
-            bucket: S3 bucket name
-            key: S3 object key
-            
-        Yields:
-            Video data chunks
+        Single HEAD for stream path: size, Content-Type (for correct MIME), ETag (caching / 304).
+        """
+        try:
+            response = self.client.head_object(Bucket=bucket, Key=key)
+            ct = response.get("ContentType") or "video/mp4"
+            return S3ObjectStreamMeta(
+                content_length=int(response["ContentLength"]),
+                content_type=ct,
+                etag=response.get("ETag"),
+            )
+        except ClientError as e:
+            logger.error(f"Error head_object for s3://{bucket}/{key}: {str(e)}")
+            raise
+
+    def stream_video(self, bucket: str, key: str) -> Iterator[bytes]:
+        """
+        Stream full object from S3 as an iterator (no Range).
         """
         try:
             logger.info(f"Streaming video from s3://{bucket}/{key}")
@@ -297,9 +346,7 @@ class S3Service:
             # Get object from S3
             response = self.client.get_object(Bucket=bucket, Key=key)
             
-            # Stream the body in chunks
-            chunk_size = 64 * 1024  # 64KB chunks
-            for chunk in response['Body'].iter_chunks(chunk_size=chunk_size):
+            for chunk in response["Body"].iter_chunks(chunk_size=STREAM_CHUNK_SIZE):
                 yield chunk
             
             logger.debug(f"Finished streaming s3://{bucket}/{key}")
@@ -307,6 +354,76 @@ class S3Service:
         except ClientError as e:
             logger.error(f"Error streaming video from S3: {str(e)}")
             raise
+
+    def stream_video_range(
+        self, bucket: str, key: str, start: int, end: int
+    ) -> Iterator[bytes]:
+        """
+        Stream a byte range (inclusive start/end) for HTTP 206 partial content.
+        """
+        try:
+            rng = f"bytes={start}-{end}"
+            logger.info(f"Streaming range {rng} from s3://{bucket}/{key}")
+            response = self.client.get_object(Bucket=bucket, Key=key, Range=rng)
+            for chunk in response["Body"].iter_chunks(chunk_size=STREAM_CHUNK_SIZE):
+                yield chunk
+        except ClientError as e:
+            logger.error(f"Error range-streaming video from S3: {str(e)}")
+            raise
+
+
+StreamRangeResult = Union[
+    Literal["full"],
+    Literal["unsatisfiable"],
+    Tuple[int, int],
+]
+
+
+def parse_stream_range(
+    range_header: Optional[str], total_size: int
+) -> StreamRangeResult:
+    """
+    Parse RFC 7233 Range for video streaming.
+
+    Returns:
+        "full" — no Range header; send whole object
+        "unsatisfiable" — valid Range syntax but no overlap with object (HTTP 416)
+        (start, end) — inclusive byte range for HTTP 206
+    """
+    if not range_header:
+        return "full"
+    m = re.match(r"bytes=(\d*)-(\d*)", range_header.strip(), re.IGNORECASE)
+    if not m:
+        return "full"
+    start_s, end_s = m.group(1), m.group(2)
+    if total_size <= 0:
+        return "unsatisfiable"
+
+    # bytes=-500  (last N bytes)
+    if start_s == "" and end_s != "":
+        suffix = int(end_s)
+        if suffix <= 0:
+            return "full"
+        start = max(0, total_size - suffix)
+        end = total_size - 1
+        return (start, end)
+
+    if start_s == "":
+        return "full"
+
+    start = int(start_s)
+    if start >= total_size:
+        return "unsatisfiable"
+
+    if end_s == "":
+        end = total_size - 1
+    else:
+        end = int(end_s)
+        if end < start:
+            return "unsatisfiable"
+        end = min(end, total_size - 1)
+
+    return (start, end)
 
 
 # Global S3 service instance

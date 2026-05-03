@@ -25,16 +25,30 @@ export class VideoService {
   }
 
   /**
-   * Get streaming URL for a video
-   * 
-   * NOTE: The backend proxies the video stream from S3.
-   * Token must be in URL because HTML5 <video> elements cannot send custom headers.
+   * URL for the HTML5 video element: backend proxies S3 bytes (no re-encode; same quality as the object).
+   * Supports HTTP Range for seeking. Token must be in the query (video tags cannot set headers).
+   *
+   * Optional: GET /videos/playback-url returns a presigned S3 URL (identical bytes); requires
+   * bucket CORS for browser playback if you switch to that.
    */
   getStreamUrl(source: string, token: string): string {
-    // Return the backend stream URL with source and token parameters
-    // Token in URL is required because HTML5 video element can't use HTTP interceptor
     const params = new URLSearchParams({ source, token });
     return `${this.apiUrl}/videos/stream?${params.toString()}`;
+  }
+
+  /**
+   * Same object as the stream proxy, as a time-limited presigned S3 GET URL.
+   * Configure S3 bucket CORS before using this as the video element src from the browser.
+   */
+  getPlaybackPresignedUrl(source: string, token: string, expiresIn = 3600) {
+    const params = new URLSearchParams({
+      source,
+      token,
+      expires_in: String(expiresIn),
+    });
+    return this.http.get<{ url: string; expires_in: number }>(
+      `${this.apiUrl}/videos/playback-url?${params.toString()}`
+    );
   }
 
   /**
