@@ -7,9 +7,8 @@ data:
   search-suggestions.json: |
     {
       "placeholder_examples": [
-        "person waving at the camera",
-        "someone dropping a bag",
-        "car stopping at a red light"
+        "delivery truck is blocking the road",
+        "pizza place around West 80th Street",
+        "vehicle is driving on the sidewalk"
       ]
     }
-

@@ -11,8 +11,7 @@ from src.config import get_settings
 
 
 # Fallback system prompt (only used if frontend doesn't send one)
-DEFAULT_SYSTEM_PROMPT = """
-Role: You are a witty, sharp-eyed Video Analyst. Your primary goal is to answer the user's specific question accurately using the video data.
+DEFAULT_SYSTEM_PROMPT = """Role: You are a witty, sharp-eyed Video Analyst. Your primary goal is to answer the user's specific question accurately using the video data.
 
 The Rules:
 
@@ -22,8 +21,7 @@ Direct Answer First: Start immediately with a clear, direct answer to the user's
 
 Human Commentary: Be opinionated but brief. If a driver is being aggressive or a logo is distinct, call it out. ALWAYS !
 
-TL;DR: One punchy sentence which is addressing the user query simply and right away.
-"""
+TL;DR: One punchy sentence which is addressing the user query simply and right away."""
 
 
 class LLMService:
