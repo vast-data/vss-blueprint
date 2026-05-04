@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, effect } from '@angular/core';
+import { Component, ViewChild, inject, signal, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
@@ -42,12 +42,20 @@ import { environment } from '../../../environments/environment';
         <div class="empty-state">
           <img src="assets/vast_logo.svg" alt="VAST" class="vast-logo-glow">
           <h2>What are you looking for?</h2>
-          <p>Type what you want to see in plain words — we’ll find the right clips.</p>
+          <p>Type what you want to see in plain words to find the right clips</p>
           <div class="examples">
             <h3>Try something like:</h3>
-            <ul>
-              @for (example of exampleQueries(); track example) {
-                <li><mat-icon>search</mat-icon> "{{ example }}"</li>
+            <ul class="example-list">
+              @for (example of exampleQueries(); track $index) {
+                <li>
+                  <button
+                    type="button"
+                    class="example-query-button"
+                    (click)="onExampleQueryClick(example)">
+                    <mat-icon>search</mat-icon>
+                    <span class="example-query-text">"{{ example }}"</span>
+                  </button>
+                </li>
               }
             </ul>
           </div>
@@ -201,23 +209,52 @@ import { environment } from '../../../environments/environment';
           font-size: 1rem;
         }
         
-        ul {
+        ul.example-list {
           list-style: none;
           padding: 0;
-          
+
           li {
+            padding: 0.35rem 0;
+          }
+
+          .example-query-button {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            width: 100%;
+            margin: 0;
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+            font: inherit;
             color: var(--text-secondary);
-            padding: 0.5rem 0;
-            
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+
             mat-icon {
               color: var(--accent-primary);
               font-size: 1.25rem;
               width: 1.25rem;
               height: 1.25rem;
               flex-shrink: 0;
+            }
+
+            .example-query-text {
+              flex: 1;
+            }
+
+            &:hover,
+            &:focus-visible {
+              color: var(--text-primary);
+              background: var(--bg-card);
+              border-color: var(--border-color);
+            }
+
+            &:focus-visible {
+              outline: 2px solid var(--accent-primary);
+              outline-offset: 2px;
             }
           }
         }
@@ -370,6 +407,8 @@ import { environment } from '../../../environments/environment';
 export class SearchPageComponent implements OnInit {
   private static readonly PAGE_SIZE = 20;
 
+  @ViewChild(SearchBarComponent) private searchBar?: SearchBarComponent;
+
   searchService = inject(SearchService);
   dialog = inject(MatDialog);
   authService = inject(AuthService);
@@ -429,6 +468,10 @@ export class SearchPageComponent implements OnInit {
     this.hasSearched.set(true);
     this.currentPage.set(1);
     this.searchService.search(request);
+  }
+
+  onExampleQueryClick(example: string) {
+    this.searchBar?.setQuery(example.trim());
   }
 
   visibleResults(): VideoSearchResult[] {

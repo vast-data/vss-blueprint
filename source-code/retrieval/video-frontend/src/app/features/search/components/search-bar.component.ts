@@ -1,4 +1,13 @@
-import { Component, EventEmitter, Output, inject, ChangeDetectorRef, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  Output,
+  ViewChild,
+  inject,
+  ChangeDetectorRef,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -56,7 +65,8 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
               <path d="M9 17A8 8 0 1 0 9 1a8 8 0 0 0 0 16zM18 18l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </div>
-          <input 
+          <input
+            #queryInput
             type="text"
             class="search-input"
             formControlName="query"
@@ -360,9 +370,9 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 0.2rem;
-        min-width: 5.5rem;
-        padding: 0.45rem 0.65rem;
+        gap: 0.24rem;
+        min-width: 6.6rem;
+        padding: 0.54rem 0.78rem;
         margin: 0;
         border: 1px solid var(--border-color);
         border-radius: 14px;
@@ -372,20 +382,20 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
         transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 
         mat-icon {
-          font-size: 1.35rem;
-          width: 1.35rem;
-          height: 1.35rem;
+          font-size: 1.62rem;
+          width: 1.62rem;
+          height: 1.62rem;
           color: var(--text-secondary);
           transition: color 0.2s ease;
         }
         .pill-label {
-          font-size: 0.65rem;
+          font-size: 0.78rem;
           font-weight: 600;
           letter-spacing: 0.02em;
           color: var(--text-secondary);
           line-height: 1.1;
           text-align: center;
-          max-width: 6rem;
+          max-width: 7.2rem;
         }
         &:hover {
           background: var(--bg-card-hover);
@@ -627,9 +637,9 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.2rem;
-      min-width: 4.5rem;
-      padding: 0.45rem 0.65rem;
+      gap: 0.24rem;
+      min-width: 5.4rem;
+      padding: 0.54rem 0.78rem;
       margin: 0;
       border: 1px solid var(--border-color);
       border-radius: 14px;
@@ -640,13 +650,13 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
       transition: background 0.2s ease, border-color 0.2s ease;
 
       mat-icon {
-        font-size: 1.35rem;
-        width: 1.35rem;
-        height: 1.35rem;
+        font-size: 1.62rem;
+        width: 1.62rem;
+        height: 1.62rem;
         color: var(--accent-primary);
       }
       .pill-label {
-        font-size: 0.65rem;
+        font-size: 0.78rem;
         font-weight: 600;
         letter-spacing: 0.02em;
         color: var(--accent-primary);
@@ -1084,7 +1094,7 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
     }
   `]
 })
-export class SearchBarComponent implements OnInit {
+export class SearchBarComponent {
   fb = inject(FormBuilder);
   cdr = inject(ChangeDetectorRef);
   http = inject(HttpClient);
@@ -1092,6 +1102,8 @@ export class SearchBarComponent implements OnInit {
   searchService = inject(SearchService);
   @Output() search = new EventEmitter<SearchRequest>();
   @Output() uploadClick = new EventEmitter<void>();
+
+  @ViewChild('queryInput') private queryInput?: ElementRef<HTMLInputElement>;
 
   showCustomDatePicker = false;
   placeholderText = 'Search videos...';
@@ -1112,23 +1124,6 @@ export class SearchBarComponent implements OnInit {
     customEndDate: [null as Date | null],
     customEndTime: ['23:59']     // Default to end of day
   });
-
-  ngOnInit() {
-    this.loadSearchSuggestions();
-  }
-
-  loadSearchSuggestions() {
-    this.http.get<any>(`${environment.apiUrl}/frontend/search-suggestions`).subscribe({
-      next: (config) => {
-        if (config.placeholder_examples && config.placeholder_examples.length > 0) {
-          this.placeholderText = `Search videos... (e.g., ${config.placeholder_examples.join(', ')})`;
-        }
-      },
-      error: (err) => {
-        console.error('Failed to load search suggestions from backend, using defaults', err);
-      }
-    });
-  }
 
   selectTimeFilter(filter: string) {
     this.searchForm.patchValue({ timeFilter: filter });
@@ -1222,9 +1217,17 @@ export class SearchBarComponent implements OnInit {
     this.search.emit(request);
   }
 
+  /** Put text in the search field and focus it (e.g. empty-state example clicks). Does not run search. */
   setQuery(query: string) {
-    // Only populate the search bar, don't trigger search
     this.searchForm.patchValue({ query });
+    this.cdr.markForCheck();
+    queueMicrotask(() => {
+      const el = this.queryInput?.nativeElement;
+      if (el) {
+        el.focus();
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
   }
 
   clearSearch() {
