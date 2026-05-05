@@ -6,6 +6,10 @@ import gc
 from typing import List, Tuple, Callable, Optional
 from moviepy.editor import VideoFileClip
 
+# If the final ceil()-based segment would be shorter than this (seconds), drop it and
+# extend the previous segment to video end (avoids MoviePy/ffmpeg failures on ~1-frame tails).
+MIN_TAIL_SEGMENT_SEC = 0.5
+
 
 class VideoProcessor:
     """Video processing utilities for segmentation"""
@@ -35,6 +39,7 @@ class VideoProcessor:
             List of tuples: (segment_content, segment_number, total_segments, duration, start_time, end_time)
         """
         segments = []
+        segments_written = 0
         
         # Create temporary file for input video
         with tempfile.NamedTemporaryFile(suffix=f".{self.output_format}", delete=False) as temp_input:
@@ -52,6 +57,13 @@ class VideoProcessor:
             gc.collect()
 
             total_segments = math.ceil(total_duration / self.segment_duration)
+            # Collapse negligible tail (e.g. 20.01s with 5s steps → avoid a 0.01s "segment 5")
+            if total_segments > 1:
+                last_start = (total_segments - 1) * self.segment_duration
+                tail = total_duration - last_start
+                if tail < MIN_TAIL_SEGMENT_SEC:
+                    total_segments -= 1
+
             logging.info(
                 f"Video duration: {total_duration:.2f}s, creating {total_segments} segments "
                 f"of {self.segment_duration}s each"
@@ -62,7 +74,10 @@ class VideoProcessor:
             # "'NoneType' object has no attribute 'stdout'" inside MoviePy/ffmpeg bindings.
             for i in range(total_segments):
                 start_time = i * self.segment_duration
-                end_time = min((i + 1) * self.segment_duration, total_duration)
+                if i == total_segments - 1:
+                    end_time = total_duration
+                else:
+                    end_time = min((i + 1) * self.segment_duration, total_duration)
                 segment_duration = end_time - start_time
 
                 logging.info(
@@ -99,6 +114,7 @@ class VideoProcessor:
                         write_kw["audio_codec"] = "aac"
                         write_kw["audio_bitrate"] = self.settings.audio_bitrate
                     segment_clip.write_videofile(temp_output_path, **write_kw)
+                    segments_written += 1
 
                     with open(temp_output_path, "rb") as f:
                         segment_content = f.read()
@@ -149,7 +165,10 @@ class VideoProcessor:
             if os.path.exists(temp_input_path):
                 os.unlink(temp_input_path)
         
-        logging.info(f"Successfully created {len(segments)} video segments")
+        logging.info(
+            f"Successfully encoded {segments_written} video segment(s)"
+            + (" (uploads via callback)" if upload_callback else "")
+        )
         return segments
     
     def get_video_info(self, video_content: bytes) -> Tuple[float, int, int]:

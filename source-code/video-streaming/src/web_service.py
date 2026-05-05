@@ -29,6 +29,23 @@ import uuid
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def ytdlp_segment_download_timeout_sec(capture_interval: int) -> int:
+    """
+    Wall-clock limit for one yt-dlp+ffmpeg segment. Merging DASH and seeking
+    often exceeds capture_interval by a large margin on slow or busy links.
+    Default: max(3 minutes, 6× segment length). Override: YTDLP_SEGMENT_TIMEOUT_SEC.
+    """
+    default = max(180, int(capture_interval * 6))
+    raw = os.environ.get("YTDLP_SEGMENT_TIMEOUT_SEC", "").strip()
+    if not raw:
+        return default
+    try:
+        n = int(raw)
+        return max(60, n)
+    except ValueError:
+        return default
+
+
 def build_ytdlp_cmd(args: list) -> list:
     """
     Build argv for yt-dlp: JS runtime (Node) + optional Netscape cookies.
@@ -310,7 +327,7 @@ class VideoCaptureService:
             
             if info_result.returncode != 0:
                 logger.error(f"Failed to get video info: {info_result.stderr}")
-                return
+                return 0
             
             try:
                 video_info = json.loads(info_result.stdout)
@@ -359,7 +376,9 @@ class VideoCaptureService:
                     ]
                 )
                 
-                result = subprocess.run(ytdlp_cmd, capture_output=True, text=True, timeout=capture_interval + 30)
+                timeout_sec = ytdlp_segment_download_timeout_sec(capture_interval)
+                logger.debug(f"yt-dlp subprocess timeout={timeout_sec}s (capture_interval={capture_interval}s)")
+                result = subprocess.run(ytdlp_cmd, capture_output=True, text=True, timeout=timeout_sec)
                 
                 if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
                     logger.info(f"✓ Downloaded segment #{capture_count + 1}: {filename}")
@@ -403,6 +422,7 @@ class VideoCaptureService:
             logger.error(f"Error in yt-dlp download capture: {e}", exc_info=True)
         finally:
             logger.info(f"yt-dlp download capture stopped. Total segments: {capture_count}")
+        return capture_count
     
     def continuous_capture(self, config):
         """
@@ -457,7 +477,7 @@ class VideoCaptureService:
                     "YouTube URL: using yt-dlp segment downloads (muxed A/V, up to 1080p); "
                     "skipping OpenCV frame capture (silent, lower quality)."
                 )
-                return self._capture_with_ytdlp_download(
+                capture_count = self._capture_with_ytdlp_download(
                     config,
                     capture_interval,
                     bucket_name,
@@ -468,7 +488,8 @@ class VideoCaptureService:
                     scenario,
                     custom_prompt,
                     max_duration,
-                )
+                ) or 0
+                return
             
             # Get the actual stream source
             actual_stream_url = self.get_stream_source(stream_url)
@@ -491,8 +512,11 @@ class VideoCaptureService:
                 # This works for videos that OpenCV can't stream (complex URLs, HLS playlists, etc.)
                 if self.is_youtube_url(stream_url):
                     logger.warning("OpenCV failed to open stream, using yt-dlp download method as fallback")
-                    return self._capture_with_ytdlp_download(config, capture_interval, bucket_name, s3_prefix,
-                                                             camera_id, capture_type, location, scenario, custom_prompt, max_duration)
+                    capture_count = self._capture_with_ytdlp_download(
+                        config, capture_interval, bucket_name, s3_prefix,
+                        camera_id, capture_type, location, scenario, custom_prompt, max_duration,
+                    ) or 0
+                    return
                 else:
                     logger.error(f"Cannot open stream: {stream_url}")
                     return
