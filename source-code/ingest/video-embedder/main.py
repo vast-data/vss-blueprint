@@ -31,6 +31,7 @@ def handler(ctx, event: VastEvent):
                 reasoning_content = reasoning_event.get("reasoning_content", "")
                 cosmos_model = reasoning_event.get("cosmos_model", "")
                 tokens_used = reasoning_event.get("tokens_used", 0)
+                cached_prompt_tokens = reasoning_event.get("cached_prompt_tokens", 0)
                 processing_time = reasoning_event.get("processing_time", 0.0)
                 video_url = reasoning_event.get("video_url", "")
                 status = reasoning_event.get("status", "success")
@@ -58,6 +59,7 @@ def handler(ctx, event: VastEvent):
                     "filename": filename,
                     "cosmos_model": cosmos_model,
                     "tokens_used": tokens_used,
+                    "cached_prompt_tokens": cached_prompt_tokens,
                     "processing_time": processing_time,
                     "status": status,
                     "reasoning_content_length": len(reasoning_content),
@@ -105,6 +107,7 @@ def handler(ctx, event: VastEvent):
                 "embedding_dimensions": len(embedding),
                 "cosmos_model": cosmos_model,
                 "tokens_used": tokens_used,
+                "cached_prompt_tokens": cached_prompt_tokens,
                 "processing_time": processing_time,
                 "video_url": video_url,
                 "status": "success",

@@ -21,6 +21,41 @@ except ImportError:
 from .prompts import get_prompt_for_scenario
 
 
+def _safe_non_negative_int(value: Any) -> int:
+    """
+    Best-effort int coercion for usage fields.
+    Returns 0 for missing, invalid, NaN/inf, or negative values.
+    """
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
+def extract_usage_token_metrics(usage: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    OpenAI-compatible usage: total_tokens and input-side tokens served from prefix/KV cache.
+    Reported as usage.prompt_tokens_details.cached_tokens — "prompt" here means full model
+    input (instructions plus multimodal/video context), not text-only.
+    """
+    if not usage:
+        return {"total_tokens": 0, "cached_prompt_tokens": 0}
+    pt = usage.get("prompt_tokens")
+    ct = usage.get("completion_tokens")
+    total = usage.get("total_tokens")
+    if total is None and (pt is not None or ct is not None):
+        total = _safe_non_negative_int(pt) + _safe_non_negative_int(ct)
+    total_i = _safe_non_negative_int(total)
+    cached = 0
+    details = usage.get("prompt_tokens_details")
+    if isinstance(details, dict):
+        cached = _safe_non_negative_int(details.get("cached_tokens"))
+    if cached == 0:
+        cached = _safe_non_negative_int(usage.get("cached_tokens"))
+    return {"total_tokens": total_i, "cached_prompt_tokens": cached}
+
+
 class S3Client:
     """S3 client for downloading videos"""
     
@@ -153,19 +188,27 @@ class CosmosReasoningClient:
                 raise RuntimeError("No choices in Cosmos API response")
             
             reasoning_content = choices[0].get("message", {}).get("content", "")
-            usage = response_data.get("usage", {})
-            tokens_used = usage.get("total_tokens", 0)
-            
+            usage = response_data.get("usage") or {}
+            metrics = extract_usage_token_metrics(usage)
+            tokens_used = metrics["total_tokens"]
+            cached_prompt_tokens = metrics["cached_prompt_tokens"]
+
             span.set_attributes({
                 "reasoning_content_length": len(reasoning_content),
-                "tokens_used": tokens_used
+                "tokens_used": tokens_used,
+                "cached_prompt_tokens": cached_prompt_tokens,
             })
-            
-            logging.info(f"[COSMOS] {self.settings.cosmos_model} | {len(reasoning_content)} chars, {tokens_used} tokens | {reasoning_time:.2f}s")
-            
+
+            cache_note = f", {cached_prompt_tokens} cached input (API prompt_tokens_details)" if cached_prompt_tokens else ""
+            logging.info(
+                f"[COSMOS] {self.settings.cosmos_model} | {len(reasoning_content)} chars, "
+                f"{tokens_used} tokens{cache_note} | {reasoning_time:.2f}s"
+            )
+
             return {
                 "reasoning_content": reasoning_content,
                 "tokens_used": tokens_used,
+                "cached_prompt_tokens": cached_prompt_tokens,
                 "processing_time": reasoning_time,
                 "cosmos_model": self.settings.cosmos_model,
                 "raw_response": response_data
@@ -206,13 +249,15 @@ class CosmosReasoningClient:
                 "reasoning_content": reasoning_result["reasoning_content"],
                 "cosmos_model": reasoning_result["cosmos_model"],
                 "tokens_used": reasoning_result["tokens_used"],
+                "cached_prompt_tokens": reasoning_result.get("cached_prompt_tokens", 0),
                 "processing_time": reasoning_result["processing_time"],
                 "video_url": ""  # Not used for hosted API, kept for backward compatibility
             }
-            
+
             span.set_attributes({
                 "reasoning_content_length": len(result["reasoning_content"]),
                 "total_tokens": result["tokens_used"],
+                "cached_prompt_tokens": result["cached_prompt_tokens"],
                 "total_processing_time": result["processing_time"]
             })
             
@@ -430,19 +475,27 @@ class NemotronReasoningClient:
                 raise RuntimeError("No choices in Nemotron API response")
             
             reasoning_content = choices[0].get("message", {}).get("content", "")
-            usage = response_data.get("usage", {})
-            tokens_used = usage.get("total_tokens", 0) if usage else 0
-            
+            usage = response_data.get("usage") or {}
+            metrics = extract_usage_token_metrics(usage)
+            tokens_used = metrics["total_tokens"]
+            cached_prompt_tokens = metrics["cached_prompt_tokens"]
+
             span.set_attributes({
                 "reasoning_content_length": len(reasoning_content),
-                "tokens_used": tokens_used
+                "tokens_used": tokens_used,
+                "cached_prompt_tokens": cached_prompt_tokens,
             })
-            
-            logging.info(f"[NEMOTRON] {self.model} | {len(reasoning_content)} chars, {tokens_used} tokens | {reasoning_time:.2f}s")
-            
+
+            cache_note = f", {cached_prompt_tokens} cached input (API prompt_tokens_details)" if cached_prompt_tokens else ""
+            logging.info(
+                f"[NEMOTRON] {self.model} | {len(reasoning_content)} chars, "
+                f"{tokens_used} tokens{cache_note} | {reasoning_time:.2f}s"
+            )
+
             return {
                 "reasoning_content": reasoning_content,
                 "tokens_used": tokens_used,
+                "cached_prompt_tokens": cached_prompt_tokens,
                 "processing_time": reasoning_time,
                 "cosmos_model": self.model,  # Using same field name for compatibility
                 "raw_response": response_data
@@ -483,16 +536,18 @@ class NemotronReasoningClient:
                 "reasoning_content": reasoning_result["reasoning_content"],
                 "cosmos_model": reasoning_result["cosmos_model"],
                 "tokens_used": reasoning_result["tokens_used"],
+                "cached_prompt_tokens": reasoning_result.get("cached_prompt_tokens", 0),
                 "processing_time": reasoning_result["processing_time"],
                 "video_url": "",  # Not used for Nemotron
             }
-            
+
             span.set_attributes({
                 "reasoning_content_length": len(result["reasoning_content"]),
                 "total_tokens": result["tokens_used"],
+                "cached_prompt_tokens": result["cached_prompt_tokens"],
                 "total_processing_time": result["processing_time"]
             })
-            
+
             return result
 
     def close(self):

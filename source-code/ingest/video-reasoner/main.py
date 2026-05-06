@@ -163,22 +163,27 @@ def handler(ctx, event: VastEvent):
                 
                 content_length = len(reasoning_result.get("reasoning_content", ""))
                 tokens_used = reasoning_result.get("tokens_used", 0)
+                cached_prompt_tokens = reasoning_result.get("cached_prompt_tokens", 0)
                 processing_time = reasoning_result.get("processing_time", 0)
                 model_name = reasoning_result.get("cosmos_model", "")
-                
+
                 reasoning_span.set_attributes({
                     "source": source,
                     "filename": filename,
                     "reasoning_provider": provider,
                     "reasoning_content_length": content_length,
                     "tokens_used": tokens_used,
+                    "cached_prompt_tokens": cached_prompt_tokens,
                     "processing_time_seconds": processing_time,
                     "model": model_name,
                     "scenario": scenario,
                     "custom_prompt": "set" if custom_prompt else ""
                 })
-                
-                ctx.logger.info(f"[{provider_name}] Complete | {content_length} chars | {tokens_used} tokens | {processing_time:.2f}s")
+
+                cache_part = f" ({cached_prompt_tokens} cached input tokens)" if cached_prompt_tokens else ""
+                ctx.logger.info(
+                    f"[{provider_name}] Complete | {content_length} chars | {tokens_used} tokens{cache_part} | {processing_time:.2f}s"
+                )
 
             result = {
                 "source": source,
@@ -186,6 +191,7 @@ def handler(ctx, event: VastEvent):
                 "reasoning_content": reasoning_result["reasoning_content"],
                 "cosmos_model": reasoning_result["cosmos_model"],
                 "tokens_used": reasoning_result["tokens_used"],
+                "cached_prompt_tokens": reasoning_result.get("cached_prompt_tokens", 0),
                 "processing_time": reasoning_result["processing_time"],
                 "video_url": reasoning_result.get("video_url", ""),  # May be empty for Nemotron
                 "status": "success",

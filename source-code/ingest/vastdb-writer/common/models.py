@@ -36,6 +36,7 @@ class EmbeddingEvent(BaseModel):
     embedding_dimensions: int
     cosmos_model: str
     tokens_used: int
+    cached_prompt_tokens: int = 0
     processing_time: float
     video_url: str
     status: str = "success"

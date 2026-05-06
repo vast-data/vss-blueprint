@@ -26,6 +26,8 @@ class VastDBClient:
             ("cosmos_model", pa.utf8()),
             ("embedding_model", pa.utf8()),
             ("tokens_used", pa.int32()),
+            # usage.prompt_tokens_details.cached_tokens (vLLM). Add column on existing tables before deploy.
+            ("cached_prompt_tokens", pa.int32()),
             ("processing_time", pa.float64()),
             ("timestamp", pa.utf8()),
             ("video_url", pa.utf8()),
@@ -168,6 +170,7 @@ class VastDBClient:
                 "cosmos_model": embedding_event.get("cosmos_model", ""),
                 "embedding_model": embedding_event.get("embedding_model", ""),
                 "tokens_used": embedding_event.get("tokens_used", 0),
+                "cached_prompt_tokens": int(embedding_event.get("cached_prompt_tokens") or 0),
                 "processing_time": embedding_event.get("processing_time", 0.0),
                 "timestamp": timestamp,
                 "video_url": embedding_event.get("video_url", ""),

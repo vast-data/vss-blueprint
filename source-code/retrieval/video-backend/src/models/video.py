@@ -24,6 +24,7 @@ class VideoSearchResult(BaseModel):
     # Optional fields for display
     cosmos_model: Optional[str] = None
     tokens_used: Optional[int] = None
+    cached_prompt_tokens: Optional[int] = None
 
     # Stream capture metadata (from video-streaming service)
     camera_id: Optional[str] = None

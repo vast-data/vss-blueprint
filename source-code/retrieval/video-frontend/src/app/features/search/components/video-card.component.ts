@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { VideoSearchResult } from '../../../shared/models/video.model';
 import { VideoService } from '../../../shared/services/video.service';
 
 @Component({
   selector: 'app-video-card',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatIconModule, MatChipsModule],
+  imports: [CommonModule, MatCardModule, MatIconModule, MatChipsModule, MatTooltipModule],
   template: `
     <mat-card class="video-card" (click)="onPlay()" 
               (mouseenter)="onHoverStart()" 
@@ -67,6 +68,21 @@ import { VideoService } from '../../../shared/services/video.service';
             <mat-icon>star</mat-icon>
             {{ (video.similarity_score * 100).toFixed(1) }}%
           </span>
+          @if (video.tokens_used != null && video.tokens_used !== undefined) {
+            <span class="metadata-item">
+              <mat-icon>token</mat-icon>
+              {{ video.tokens_used }} tokens
+            </span>
+          }
+          @if ((video.cached_prompt_tokens ?? 0) > 0) {
+            <span
+              class="metadata-item cache-input"
+              matTooltip="Input tokens from prefix/KV cache (API field prompt_tokens_details; multimodal input)."
+              matTooltipPosition="above">
+              <mat-icon>bolt</mat-icon>
+              {{ video.cached_prompt_tokens }} cached input
+            </span>
+          }
           @if (video.camera_id && video.camera_id.trim()) {
             <span class="metadata-item">
               <mat-icon>videocam</mat-icon>
@@ -286,6 +302,15 @@ import { VideoService } from '../../../shared/services/video.service';
           
           mat-icon {
             color: #73c8fd; /* lightblue-400 */
+          }
+        }
+
+        &.cache-input {
+          border-color: rgba(234, 179, 8, 0.35);
+          color: rgba(234, 179, 8, 0.95);
+
+          mat-icon {
+            color: rgba(234, 179, 8, 0.95);
           }
         }
       }

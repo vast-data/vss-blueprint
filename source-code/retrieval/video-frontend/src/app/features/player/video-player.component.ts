@@ -121,10 +121,6 @@ import { VideoService } from '../../shared/services/video.service';
               <mat-icon>memory</mat-icon>
               <span>{{ data.video.cosmos_model }}</span>
             </div>
-            <div class="meta-chip">
-              <mat-icon>token</mat-icon>
-              <span>{{ data.video.tokens_used }} tokens</span>
-            </div>
             <div class="meta-chip" [class.public]="data.video.is_public" [class.private]="!data.video.is_public">
               <mat-icon>{{ data.video.is_public ? 'public' : 'lock' }}</mat-icon>
               <span>{{ data.video.is_public ? 'Public' : 'Private' }}</span>
