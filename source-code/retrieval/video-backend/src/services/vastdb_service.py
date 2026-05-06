@@ -204,6 +204,7 @@ class VastDBService:
                     tags,
                     cosmos_model,
                     tokens_used,
+                    cached_prompt_tokens,
                     camera_id,
                     capture_type,
                     location,
@@ -418,6 +419,12 @@ class VastDBService:
                                 similarity_score=similarity_score,
                                 cosmos_model=str(row.get('cosmos_model')) if pd.notna(row.get('cosmos_model')) else None,
                                 tokens_used=int(row.get('tokens_used')) if pd.notna(row.get('tokens_used')) else None,
+                                cached_prompt_tokens=(
+                                    int(row["cached_prompt_tokens"])
+                                    if "cached_prompt_tokens" in row.index
+                                    and pd.notna(row.get("cached_prompt_tokens"))
+                                    else None
+                                ),
                                 camera_id=str(row.get('camera_id')) if pd.notna(row.get('camera_id')) else None,
                                 capture_type=str(row.get('capture_type')) if pd.notna(row.get('capture_type')) else None,
                                 location=str(row.get('location')) if pd.notna(row.get('location')) else None
@@ -752,6 +759,7 @@ class VastDBService:
                     tags,
                     cosmos_model,
                     tokens_used,
+                    cached_prompt_tokens,
                     camera_id,
                     capture_type,
                     location
@@ -810,6 +818,12 @@ class VastDBService:
                 similarity_score=1.0,  # Not applicable for direct lookup
                 cosmos_model=row.get('cosmos_model'),
                 tokens_used=row.get('tokens_used'),
+                cached_prompt_tokens=(
+                    int(row["cached_prompt_tokens"])
+                    if "cached_prompt_tokens" in row.index
+                    and pd.notna(row.get("cached_prompt_tokens"))
+                    else None
+                ),
                 camera_id=row.get('camera_id'),
                 capture_type=row.get('capture_type'),
                 location=row.get('location')

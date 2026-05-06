@@ -59,6 +59,23 @@ import { VideoService } from '../../shared/services/video.service';
         </button>
       </div>
 
+      @if (replayTokenLineVisible()) {
+        <div class="replay-stats" matTooltip="Cached count = input tokens from KV/prefix cache (API: prompt_tokens_details; includes guide text and video/frame tokens).">
+          @if (data.video.tokens_used != null && data.video.tokens_used !== undefined) {
+            <span>{{ data.video.tokens_used }} tokens</span>
+          }
+          @if (data.video.tokens_used != null && data.video.tokens_used !== undefined && (data.video.cached_prompt_tokens ?? 0) > 0) {
+            <span class="replay-stats-sep">·</span>
+          }
+          @if ((data.video.cached_prompt_tokens ?? 0) > 0) {
+            <span class="replay-cache">
+              <mat-icon class="replay-cache-icon">bolt</mat-icon>
+              {{ data.video.cached_prompt_tokens }} cached input
+            </span>
+          }
+        </div>
+      }
+
       <!-- Video Player - CENTER -->
       <div class="video-section">
         @if (loading()) {
@@ -125,6 +142,15 @@ import { VideoService } from '../../shared/services/video.service';
               <mat-icon>token</mat-icon>
               <span>{{ data.video.tokens_used }} tokens</span>
             </div>
+            @if ((data.video.cached_prompt_tokens ?? 0) > 0) {
+              <div
+                class="meta-chip cache-chip"
+                matTooltip="Input tokens from prefix/KV cache (API field prompt_tokens_details; multimodal input, not text-only)."
+                matTooltipPosition="above">
+                <mat-icon>bolt</mat-icon>
+                <span>{{ data.video.cached_prompt_tokens }} cached input</span>
+              </div>
+            }
             <div class="meta-chip" [class.public]="data.video.is_public" [class.private]="!data.video.is_public">
               <mat-icon>{{ data.video.is_public ? 'public' : 'lock' }}</mat-icon>
               <span>{{ data.video.is_public ? 'Public' : 'Private' }}</span>
@@ -272,6 +298,39 @@ import { VideoService } from '../../shared/services/video.service';
           color: var(--text-secondary);
         }
       }
+    }
+
+    .replay-stats {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.5rem;
+      padding: 0.35rem 1rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      background: rgba(0, 0, 0, 0.22);
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .replay-stats-sep {
+      opacity: 0.45;
+      user-select: none;
+    }
+
+    .replay-cache {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      color: rgba(234, 179, 8, 0.95);
+    }
+
+    .replay-cache-icon {
+      font-size: 1rem;
+      width: 1rem;
+      height: 1rem;
+      color: rgba(234, 179, 8, 0.95);
     }
 
     /* Video Section */
@@ -434,6 +493,10 @@ import { VideoService } from '../../shared/services/video.service';
           
           mat-icon { color: #fbbf24; }
         }
+
+        &.cache-chip mat-icon {
+          color: rgba(234, 179, 8, 0.9);
+        }
       }
       
       .tags-row {
@@ -498,6 +561,14 @@ export class VideoPlayerComponent implements OnInit {
   streamUrl = signal<SafeResourceUrl | null>(null);
 
   constructor(@Inject(MAT_DIALOG_DATA) public data: { video: VideoSearchResult }) {}
+
+  /** Token stats shown on the strip above the player during replay. */
+  replayTokenLineVisible(): boolean {
+    const v = this.data.video;
+    const hasTokens = v.tokens_used != null && v.tokens_used !== undefined;
+    const hasCache = (v.cached_prompt_tokens ?? 0) > 0;
+    return hasTokens || hasCache;
+  }
 
   ngOnInit() {
     this.loadVideo();

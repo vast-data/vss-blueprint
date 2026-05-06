@@ -13,6 +13,8 @@ export interface VideoSearchResult {
   similarity_score: number;
   cosmos_model?: string;
   tokens_used?: number;
+  /** Prompt tokens from KV/prefix cache when Cosmos/vLLM reports usage.prompt_tokens_details.cached_tokens */
+  cached_prompt_tokens?: number | null;
   // Stream capture metadata
   camera_id?: string;
   capture_type?: string;
