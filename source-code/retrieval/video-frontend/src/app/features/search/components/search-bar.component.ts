@@ -16,7 +16,10 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
+import {
+  MatAutocompleteModule,
+  MatAutocompleteSelectedEvent,
+} from '@angular/material/autocomplete';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
@@ -41,7 +44,7 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
     MatNativeDateModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSelectModule,
+    MatAutocompleteModule,
     MatCheckboxModule,
     MatTooltipModule
   ],
@@ -292,17 +295,24 @@ import { SqlQueryDialogComponent } from './sql-query-dialog.component';
             @for (field of metadataFields(); track field.name) {
               <div class="filter-field">
                 @if (field.ui_type === 'select' && field.options && field.options.length > 0) {
-                  <!-- Select Dropdown -->
-                  <mat-form-field appearance="outline" class="filter-input">
+                  <!-- Searchable select: type in the field to filter options; pick from list -->
+                  <mat-form-field appearance="outline" class="filter-input metadata-autocomplete">
                     <mat-label>{{field.label}}</mat-label>
-                    <mat-select 
-                      [(ngModel)]="metadataFilterValues[field.name]"
-                      (selectionChange)="onMetadataFilterChange()">
-                      <mat-option [value]="">-- All --</mat-option>
-                      @for (option of field.options; track option) {
+                    <input
+                      matInput
+                      [(ngModel)]="metadataAutocompleteText[field.name]"
+                      (ngModelChange)="onMetadataAutocompleteInput(field, $event)"
+                      [matAutocomplete]="metaAuto"
+                      [placeholder]="'Type to filter or choose ' + field.label.toLowerCase()"
+                      [attr.aria-label]="field.label + ' filter'" />
+                    <mat-autocomplete
+                      #metaAuto="matAutocomplete"
+                      (optionSelected)="onMetadataAutocompleteSelected(field, $event)">
+                      <mat-option [value]="''">-- All --</mat-option>
+                      @for (option of filteredSelectOptions(field); track option) {
                         <mat-option [value]="option">{{option}}</mat-option>
                       }
-                    </mat-select>
+                    </mat-autocomplete>
                   </mat-form-field>
                 } @else if (field.ui_type === 'text' || field.ui_type === 'select') {
                   <!-- Text Input -->
@@ -1113,6 +1123,8 @@ export class SearchBarComponent {
   metadataFields = signal<MetadataField[]>([]);
   loadingSchema = signal(false);
   metadataFilterValues: Record<string, any> = {};
+  /** Text in searchable metadata select fields (filters options as user types). */
+  metadataAutocompleteText: Record<string, string> = {};
 
   searchForm = this.fb.group({
     query: [''],
@@ -1267,7 +1279,55 @@ export class SearchBarComponent {
 
   clearMetadataFilters() {
     this.metadataFilterValues = {};
+    this.metadataAutocompleteText = {};
     console.log('[METADATA] Filters cleared');
+  }
+
+  onMetadataAutocompleteInput(field: MetadataField, value: string) {
+    this.metadataAutocompleteText[field.name] = value;
+    const opts = field.options ?? [];
+    const trimmed = value.trim();
+    if (!trimmed) {
+      delete this.metadataFilterValues[field.name];
+      this.onMetadataFilterChange();
+      return;
+    }
+    const exact = opts.find((o) => String(o).toLowerCase() === trimmed.toLowerCase());
+    if (exact !== undefined) {
+      this.metadataFilterValues[field.name] = exact;
+    } else {
+      delete this.metadataFilterValues[field.name];
+    }
+    this.onMetadataFilterChange();
+  }
+
+  onMetadataAutocompleteSelected(field: MetadataField, event: MatAutocompleteSelectedEvent) {
+    const v = event.option.value as string;
+    if (v === '' || v === null || v === undefined) {
+      delete this.metadataFilterValues[field.name];
+      this.metadataAutocompleteText[field.name] = '';
+    } else {
+      this.metadataFilterValues[field.name] = v;
+      this.metadataAutocompleteText[field.name] = String(v);
+    }
+    this.onMetadataFilterChange();
+  }
+
+  /** Options shown in autocomplete panel (filtered by current input text). */
+  filteredSelectOptions(field: MetadataField): string[] {
+    const options = field.options ?? [];
+    const q = (this.metadataAutocompleteText[field.name] ?? '').trim().toLowerCase();
+    let list = q.length
+      ? options.filter((o) => String(o).toLowerCase().includes(q))
+      : [...options];
+    const selected = this.metadataFilterValues[field.name];
+    if (selected !== null && selected !== undefined && selected !== '') {
+      const sel = String(selected);
+      if (!list.includes(sel)) {
+        list = [sel, ...list];
+      }
+    }
+    return list;
   }
 
   hasActiveFilters(): boolean {

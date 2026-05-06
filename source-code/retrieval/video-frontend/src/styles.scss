@@ -529,9 +529,11 @@ div.mat-mdc-menu-panel[role="menu"] .mat-mdc-menu-item {
   }
 }
 
-/* Global mat-select dropdown panel styling - theme-aware */
+/* Global mat-select / mat-autocomplete dropdown panels - theme-aware (same look) */
 .cdk-overlay-pane .mat-mdc-select-panel,
-.mat-mdc-select-panel {
+.mat-mdc-select-panel,
+.cdk-overlay-pane .mat-mdc-autocomplete-panel,
+.mat-mdc-autocomplete-panel {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;
   border-radius: 8px !important;
