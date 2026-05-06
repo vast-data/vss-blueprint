@@ -121,6 +121,19 @@ import { VideoService } from '../../shared/services/video.service';
               <mat-icon>memory</mat-icon>
               <span>{{ data.video.cosmos_model }}</span>
             </div>
+            <div class="meta-chip">
+              <mat-icon>token</mat-icon>
+              <span>{{ data.video.tokens_used }} tokens</span>
+            </div>
+            @if ((data.video.cached_prompt_tokens ?? 0) > 0) {
+              <div
+                class="meta-chip cache-chip"
+                matTooltip="Input tokens from prefix/KV cache (API field prompt_tokens_details; multimodal input, not text-only)."
+                matTooltipPosition="above">
+                <mat-icon>bolt</mat-icon>
+                <span>{{ data.video.cached_prompt_tokens }} cached input</span>
+              </div>
+            }
             <div class="meta-chip" [class.public]="data.video.is_public" [class.private]="!data.video.is_public">
               <mat-icon>{{ data.video.is_public ? 'public' : 'lock' }}</mat-icon>
               <span>{{ data.video.is_public ? 'Public' : 'Private' }}</span>
@@ -429,6 +442,10 @@ import { VideoService } from '../../shared/services/video.service';
           color: #fbbf24;
           
           mat-icon { color: #fbbf24; }
+        }
+
+        &.cache-chip mat-icon {
+          color: rgba(234, 179, 8, 0.9);
         }
       }
       
