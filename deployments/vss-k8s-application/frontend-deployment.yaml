@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: vastdatasolutions/vde-video-frontend:v1
+        image: your.registry/vss-video-frontend:v1
         imagePullPolicy: Always
         ports:
         - containerPort: 80
