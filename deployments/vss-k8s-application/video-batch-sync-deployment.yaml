@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: video-batch-sync
-        image: vastdatasolutions/vde-video-batch-sync:v1
+        image: your.registry/vss-video-batch-sync:v1
         imagePullPolicy: Always
         ports:
         - containerPort: 5000

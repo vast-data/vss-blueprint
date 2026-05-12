@@ -30,7 +30,7 @@ Configure in `ingest/vde-video-ingest-secret-template.yaml`:
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `vastdatasolutions/vde-video-segmenter:v1`
+- **Image**: `your.registry/vde-video-segmenter:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
 - **Dependencies**: FFmpeg, Python 3.11, boto3 for S3 access
 

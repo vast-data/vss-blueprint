@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: video-stream-capture
-        image: vastdatasolutions/vde-video-streaming:v1
+        image: your.registry/vss-video-streaming:v1
         imagePullPolicy: Always
         ports:
         - containerPort: 5000

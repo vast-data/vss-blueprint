@@ -43,13 +43,28 @@ vim backend-secret.yaml
 
 ## Step 2: Docker Images
 
-Pre-built images (ready to use):
-- `vastdatasolutions/vde-video-backend:v1`
-- `vastdatasolutions/vde-video-frontend:v1`
-- `vastdatasolutions/vde-video-streaming:v1`
-- `vastdatasolutions/vde-video-batch-sync:v1`
+Build the imager using Dockerfile and replace `your.registry` in each `*-deployment.yaml` with your own registry host.
+From the repo root (`vss-blueprint/`), build and push (adjust tags and platform as needed for your cluster):
 
-Add Docker Hub registry to your DataEngine tenant in VMS.
+```bash
+# Backend
+docker build -t your.registry/vde-video-backend:v1 -f source-code/retrieval/video-backend/Dockerfile source-code/retrieval/video-backend
+docker push your.registry/vde-video-backend:v1
+
+# Frontend
+docker build -t your.registry/vde-video-frontend:v1 -f source-code/retrieval/video-frontend/Dockerfile source-code/retrieval/video-frontend
+docker push your.registry/vde-video-frontend:v1
+
+# Video streaming
+docker build -t your.registry/vde-video-streaming:v1 -f source-code/video-streaming/Dockerfile source-code/video-streaming
+docker push your.registry/vde-video-streaming:v1
+
+# Video batch sync
+docker build -t your.registry/vde-video-batch-sync:v1 -f source-code/video-batch-sync/Dockerfile source-code/video-batch-sync
+docker push your.registry/vde-video-batch-sync:v1
+```
+
+If your cluster requires a specific architecture (for example `linux/amd64`), add `--platform linux/amd64` to each `docker build`. Ensure your registry is reachable from the cluster (image pull secrets if the registry is private).
 
 ---
 

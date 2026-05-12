@@ -34,7 +34,7 @@ For NVIDIA Cloud, set: `embeddinghost: integrate.api.nvidia.com`, `embeddingport
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `vastdatasolutions/vde-video-embedder:v1`
+- **Image**: `your.registry/vde-video-embedder:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
 - **Dependencies**: Python 3.11, NVIDIA NIM embedding API access
 
