@@ -48,20 +48,20 @@ From the repo root (`vss-blueprint/`), build and push (adjust tags and platform 
 
 ```bash
 # Backend
-docker build -t your.registry/vde-video-backend:v1 -f source-code/retrieval/video-backend/Dockerfile source-code/retrieval/video-backend
-docker push your.registry/vde-video-backend:v1
+docker build -t your.registry/vss-video-backend:v1 -f source-code/retrieval/video-backend/Dockerfile source-code/retrieval/video-backend
+docker push your.registry/vss-video-backend:v1
 
 # Frontend
-docker build -t your.registry/vde-video-frontend:v1 -f source-code/retrieval/video-frontend/Dockerfile source-code/retrieval/video-frontend
-docker push your.registry/vde-video-frontend:v1
+docker build -t your.registry/vss-video-frontend:v1 -f source-code/retrieval/video-frontend/Dockerfile source-code/retrieval/video-frontend
+docker push your.registry/vss-video-frontend:v1
 
 # Video streaming
-docker build -t your.registry/vde-video-streaming:v1 -f source-code/video-streaming/Dockerfile source-code/video-streaming
-docker push your.registry/vde-video-streaming:v1
+docker build -t your.registry/vss-video-streaming:v1 -f source-code/video-streaming/Dockerfile source-code/video-streaming
+docker push your.registry/vss-video-streaming:v1
 
 # Video batch sync
-docker build -t your.registry/vde-video-batch-sync:v1 -f source-code/video-batch-sync/Dockerfile source-code/video-batch-sync
-docker push your.registry/vde-video-batch-sync:v1
+docker build -t your.registry/vss-video-batch-sync:v1 -f source-code/video-batch-sync/Dockerfile source-code/video-batch-sync
+docker push your.registry/vss-video-batch-sync:v1
 ```
 
 If your cluster requires a specific architecture (for example `linux/amd64`), add `--platform linux/amd64` to each `docker build`. Ensure your registry is reachable from the cluster (image pull secrets if the registry is private).

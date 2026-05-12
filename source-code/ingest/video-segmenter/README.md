@@ -12,7 +12,7 @@ A VAST DataEngine serverless function that splits uploaded videos into smaller s
 
 ## Easy to Adjust
 
-Configure in `ingest/vde-video-ingest-secret-template.yaml`:
+Configure in `ingest/vss-video-ingest-secret-template.yaml`:
 
 - **`segment_duration`**: Length of each segment in seconds (default: `5`)
 - **`output_codec`**: Video codec (default: `libx264`)
@@ -30,7 +30,7 @@ Configure in `ingest/vde-video-ingest-secret-template.yaml`:
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `your.registry/vde-video-segmenter:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
+- **Image**: `your.registry/vss-video-segmenter:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
 - **Dependencies**: FFmpeg, Python 3.11, boto3 for S3 access
 

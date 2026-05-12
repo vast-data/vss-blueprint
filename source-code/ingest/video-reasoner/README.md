@@ -94,5 +94,5 @@ Max 800 characters. URL-encoded automatically.
 
 ## Runtime
 
-- **Image**: `your.registry/vde-video-reasoner:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
+- **Image**: `your.registry/vss-video-reasoner:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
 - **Trigger**: S3 bucket event on `video-chunks-segments`

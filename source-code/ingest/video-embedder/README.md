@@ -11,7 +11,7 @@ A VAST DataEngine serverless function that converts video reasoning text into ve
 
 ## Easy to Adjust
 
-Configure in `ingest/vde-video-ingest-secret-template.yaml`:
+Configure in `ingest/vss-video-ingest-secret-template.yaml`:
 
 | Setting | Description |
 |---------|-------------|
@@ -34,7 +34,7 @@ For NVIDIA Cloud, set: `embeddinghost: integrate.api.nvidia.com`, `embeddingport
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `your.registry/vde-video-embedder:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
+- **Image**: `your.registry/vss-video-embedder:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-ingest-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
 - **Dependencies**: Python 3.11, NVIDIA NIM embedding API access
 

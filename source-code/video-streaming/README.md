@@ -57,5 +57,5 @@ Health check.
 
 - **Format**: MP4 (H.264)
 - **Resolution**: Up to 720p
-- **Image**: `your.registry/vde-video-streaming:v1` (placeholder — build and push from this directory with `docker build`; see [K8s deployment guide](../../deployments/vss-k8s-application/README.md#step-2-docker-images))
+- **Image**: `your.registry/vss-video-streaming:v1` (placeholder — build and push from this directory with `docker build`; see [K8s deployment guide](../../deployments/vss-k8s-application/README.md#step-2-docker-images))
 - **Internal**: `video-stream-capture-service:5000`

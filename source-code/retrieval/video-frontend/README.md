@@ -51,7 +51,7 @@ Edit `angular.json` or `package.json` for:
 ## What Runs It
 
 - **Runtime**: Nginx web server (containerized)
-- **Image**: `your.registry/vde-video-frontend:v1` (placeholder — build and push from this directory; see [K8s deployment guide](../../../deployments/vss-k8s-application/README.md#step-2-docker-images))
+- **Image**: `your.registry/vss-video-frontend:v1` (placeholder — build and push from this directory; see [K8s deployment guide](../../../deployments/vss-k8s-application/README.md#step-2-docker-images))
 - **Deployment**: Kubernetes deployment (see main README Part 2)
 - **Access**: Via ingress at `http://video-lab.<cluster_name>.vastdata.com`
 - **Build**: Angular CLI builds static files served by Nginx

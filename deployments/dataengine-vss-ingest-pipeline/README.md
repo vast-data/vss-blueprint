@@ -62,10 +62,10 @@ Navigate to **DataEngine UI → Functions** and create:
 
 | Function | Image (placeholder — use the image you built and pushed) |
 |----------|-------|
-| `video-segmenter` | `your.registry/vde-video-segmenter:v1` |
-| `video-reasoner` | `your.registry/vde-video-reasoner:v1` |
-| `video-embedder` | `your.registry/vde-video-embedder:v1` |
-| `video-vastdb-writer` | `your.registry/vde-vastdb-writer:v1` |
+| `video-segmenter` | `your.registry/vss-video-segmenter:v1` |
+| `video-reasoner` | `your.registry/vss-video-reasoner:v1` |
+| `video-embedder` | `your.registry/vss-video-embedder:v1` |
+| `video-vastdb-writer` | `your.registry/vss-vastdb-writer:v1` |
 
 ## Step 4: Create Pipeline
 
@@ -135,28 +135,28 @@ Set `--container-registry` to the registry name as configured in VMS. Replace `Y
 vastde functions create \
   --name video-segmenter \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vde-video-segmenter \
+  --artifact-source YOUR_ORG/vss-video-segmenter \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-reasoner \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vde-video-reasoner \
+  --artifact-source YOUR_ORG/vss-video-reasoner \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-embedder \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vde-video-embedder \
+  --artifact-source YOUR_ORG/vss-video-embedder \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-vastdb-writer \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vde-vastdb-writer \
+  --artifact-source YOUR_ORG/vss-vastdb-writer \
   --artifact-type image \
   --image-tag v1
 ```
@@ -198,23 +198,23 @@ From `vss-blueprint/`:
 ```bash
 # video-segmenter
 cd source-code/ingest/video-segmenter
-vastde build -t your.registry/vde-video-segmenter:v1 . --platform linux/amd64
-docker push your.registry/vde-video-segmenter:v1
+vastde build -t your.registry/vss-video-segmenter:v1 . --platform linux/amd64
+docker push your.registry/vss-video-segmenter:v1
 
 # video-reasoner
 cd ../video-reasoner
-vastde build -t your.registry/vde-video-reasoner:v1 . --platform linux/amd64
-docker push your.registry/vde-video-reasoner:v1
+vastde build -t your.registry/vss-video-reasoner:v1 . --platform linux/amd64
+docker push your.registry/vss-video-reasoner:v1
 
 # video-embedder
 cd ../video-embedder
-vastde build -t your.registry/vde-video-embedder:v1 . --platform linux/amd64
-docker push your.registry/vde-video-embedder:v1
+vastde build -t your.registry/vss-video-embedder:v1 . --platform linux/amd64
+docker push your.registry/vss-video-embedder:v1
 
-# vastdb-writer (image name vde-vastdb-writer)
+# vastdb-writer (image name vss-vastdb-writer)
 cd ../vastdb-writer
-vastde build -t your.registry/vde-vastdb-writer:v1 . --platform linux/amd64
-docker push your.registry/vde-vastdb-writer:v1
+vastde build -t your.registry/vss-vastdb-writer:v1 . --platform linux/amd64
+docker push your.registry/vss-vastdb-writer:v1
 ```
 
 Replace `your.registry` with your real registry. Use the same names and tags in the DataEngine UI, in `vastde functions create` (see Step 3), and in your VMS registry configuration.
