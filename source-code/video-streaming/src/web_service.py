@@ -9,7 +9,6 @@ Author: AI Assistant
 Date: 2024
 """
 
-import cv2
 import time
 import os
 import json
@@ -28,6 +27,22 @@ import uuid
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+_cv2 = None
+
+
+def _lazy_cv2():
+    """
+    Load OpenCV only when needed. The full opencv-python wheel pulls large native
+    libs that can interact badly with OpenSSL/FIPS on some Kubernetes nodes; deferring
+    import lets Flask/S3 (TLS) initialize first and keeps /ping healthy for non-OpenCV paths.
+    """
+    global _cv2
+    if _cv2 is None:
+        import cv2 as cv2_module
+
+        _cv2 = cv2_module
+    return _cv2
 
 def ytdlp_segment_download_timeout_sec(capture_interval: int) -> int:
     """
@@ -243,6 +258,7 @@ class VideoCaptureService:
     
     def test_stream(self, stream_url):
         """Test if a stream URL is accessible and working."""
+        cv2 = _lazy_cv2()
         logger.info(f"Testing stream: {stream_url}")
         
         if self.is_youtube_url(stream_url):
@@ -491,6 +507,7 @@ class VideoCaptureService:
                 ) or 0
                 return
             
+            cv2 = _lazy_cv2()
             # Get the actual stream source
             actual_stream_url = self.get_stream_source(stream_url)
             if not actual_stream_url:
