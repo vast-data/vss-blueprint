@@ -1,4 +1,6 @@
-FROM python:3.11-slim
+# Match video-backend base (python:3.10-slim) so OpenSSL/glibc match the image that already
+# runs on strict/FIPS Kubernetes workers — avoids streaming-only native TLS/OpenCV mismatches.
+FROM python:3.10-slim
 
 # yt-dlp YouTube extraction often needs a JS runtime (n/challenge scripts). Without Node/Deno,
 # you see "No supported JavaScript runtime" and format extraction fails intermittently.
