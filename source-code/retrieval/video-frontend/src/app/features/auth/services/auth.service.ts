@@ -62,12 +62,12 @@ export class AuthService {
     console.log('[AuthService] Auto-login state set successfully');
   }
 
-  login(username: string, secretKey: string) {
+  login(username: string, password: string) {
     this.state.update((state) => ({ ...state, status: 'loading', error: null }));
 
     const loginData: LoginRequest = {
       username,
-      secret_key: secretKey
+      password
     };
 
     this.httpClient.post<LoginResponse>(`${environment.apiUrl}/auth/login`, loginData)
@@ -84,7 +84,7 @@ export class AuthService {
           this.router.navigate([SETTINGS.DEFAULT_URL]);
         },
         error: (response) => {
-          const errorDetail = response.error?.detail || 'Authentication failed. Please check your username and secret key.';
+          const errorDetail = response.error?.detail || 'Authentication failed. Please check your username and password.';
           this.state.update((state) => ({ 
             ...state, 
             token: null, 

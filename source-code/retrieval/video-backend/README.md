@@ -13,34 +13,30 @@ REST API service for video search, authentication, and management.
 
 ## User Authentication
 
-Users authenticate with their **VAST username + S3 secret key** (not DataEngine password).
+Users authenticate with their **VAST username + password** (same as VMS login).
 
 ### Setup
 
-1. **Create Read-Only Role** (VMS > Administrators > Administrative Roles)
-   - Name: `read-only`, Permissions: Read-only
+Configure backend secret (`deployments/vss-k8s-application/backend-secret.yaml`):
 
-2. **Create Manager User** (VMS > Administrators > Managers)
-   - Name: `vssadmin`, attach to `read-only` role, uncheck "Password is temporary"
+```yaml
+vast_host: "<vms-ip-or-hostname>"
+tenant_name: "default"
+jwt_secret: "<openssl rand -hex 32>"
+```
 
-3. **Configure Backend Secret, including VMS ip & tenant name** (`deployments/vss-k8s-application/backend-secret.yaml`):
-   ```yaml
-   vast_admin_username: "vssadmin"
-   vast_admin_password: "password"
-   vast_host: ""
-   tenant_name: "default"
-   ```
+Users must have a VMS password set on their local account.
 
 ### How It Works
 
-1. User enters username, S3 secret key, VMS host, and tenant name
-2. Backend validates credentials against VAST cluster
-3. JWT token issued for session
+1. User enters username and password on the login page
+2. Backend validates credentials against VMS `POST /api/token/{tenant}/` (falls back to `/api/token/`)
+3. On success, backend issues a signed app JWT for the session
 
 ### Troubleshooting
 
-- **Auth fails**: Check `s3_endpoint` matches tenant's S3 endpoint
-- **Multi-tenant**: Deploy separate backends per tenant with matching `s3_endpoint`
+- **Auth fails**: Verify user has a VMS password and `vast_host` / `tenant_name` match the cluster
+- **Multi-tenant**: Set `tenant_name` to the correct tenant in `backend-secret.yaml`
 - **Logs**: `kubectl logs -n <namespace> -l app=video-backend`
 
 ---

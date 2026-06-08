@@ -38,11 +38,10 @@ export class LoginComponent implements OnInit {
 
   form = this.fb.group({
     username: [localStorage.getItem('cached_username') || '', Validators.required],
-    secretKey: ['', Validators.required]
+    password: ['', Validators.required]
   });
-  
-  // Secret key visibility toggle
-  hideSecretKey = signal(true);
+
+  hidePassword = signal(true);
 
   ngOnInit() {
     // Handle auto-login from blueprints page
@@ -98,10 +97,10 @@ export class LoginComponent implements OnInit {
 
   onLogin() {
     if (this.form.valid) {
-      const { username, secretKey } = this.form.value;
-      if (username && secretKey) {
+      const { username, password } = this.form.value;
+      if (username && password) {
         localStorage.setItem('cached_username', username);
-        this.authService.login(username, secretKey);
+        this.authService.login(username, password);
       }
     }
   }

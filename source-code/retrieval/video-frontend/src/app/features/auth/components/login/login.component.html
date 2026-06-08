@@ -23,10 +23,10 @@
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="full-width">
-        <mat-label>S3 Secret Key</mat-label>
-        <input matInput [type]="hideSecretKey() ? 'password' : 'text'" formControlName="secretKey" placeholder="Enter your S3 secret key" autocomplete="off">
-        <button mat-icon-button matSuffix type="button" (click)="hideSecretKey.set(!hideSecretKey())" [attr.aria-label]="'Hide secret key'" [attr.aria-pressed]="!hideSecretKey()">
-          <mat-icon>{{ hideSecretKey() ? 'visibility_off' : 'visibility' }}</mat-icon>
+        <mat-label>Password</mat-label>
+        <input matInput [type]="hidePassword() ? 'password' : 'text'" formControlName="password" placeholder="Enter your password" autocomplete="current-password">
+        <button mat-icon-button matSuffix type="button" (click)="hidePassword.set(!hidePassword())" [attr.aria-label]="'Hide password'" [attr.aria-pressed]="!hidePassword()">
+          <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
         </button>
       </mat-form-field>
 
@@ -52,9 +52,7 @@
     </form>
 
     <div class="login-footer">
-      <p class="help-text">Don't have an S3 secret key? Contact your VAST administrator to generate one for your account.</p>
       <p>Powered by <a href="https://vastdata.com" target="_blank" rel="noopener noreferrer">vastdata.com</a></p>
     </div>
   </div>
 </div>
-

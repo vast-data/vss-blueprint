@@ -1,6 +1,6 @@
 export interface LoginRequest {
   username: string;
-  secret_key: string;  // S3 secret key for local users (VMS and tenant from backend config)
+  password: string;
 }
 
 export interface LoginResponse {

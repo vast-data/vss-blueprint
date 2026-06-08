@@ -64,12 +64,10 @@ class Settings(BaseSettings):
     llm_max_continuations: int = Field(default=4, description="Extra continuation chunks when response hits token limit")
     llm_local_nim: bool = Field(default=False, description="True = use local NIM (llm_host/port), False = NVIDIA Cloud")
     
-    # VAST Admin Credentials (for authenticating local users)
-    vast_admin_username: str = Field(..., description="VAST admin username for API queries")
-    vast_admin_password: str = Field(..., description="VAST admin password for API queries")
     # VAST VMS & Tenant (used for login; not sent from frontend)
     vast_host: str = Field(..., description="VAST management server address (VMS) for user authentication")
     tenant_name: str = Field(default="default", description="Tenant name for user authentication")
+    jwt_secret: str = Field(..., description="Secret for signing app JWT tokens (e.g. openssl rand -hex 32)")
     
     # CORS Settings (defaults only, not required in secret)
     cors_origins: list[str] = Field(

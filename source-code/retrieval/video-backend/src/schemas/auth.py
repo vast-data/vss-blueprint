@@ -1,13 +1,13 @@
 """
 Authentication schemas
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class VastLoginRequest(BaseModel):
-    """Login request with VAST user credentials (all providers supported). VMS and tenant come from backend config."""
+    """Login request with VAST user credentials. VMS and tenant come from backend config."""
     username: str
-    secret_key: str  # S3 secret key (for local, AD, LDAP, or NIS users)
+    password: str
 
 
 class Token(BaseModel):

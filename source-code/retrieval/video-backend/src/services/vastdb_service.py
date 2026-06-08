@@ -281,6 +281,11 @@ class VastDBService:
                         
                         logger.info(f"[METADATA_FILTER] Added filter: {safe_field_name} = {field_value}")
                 logger.info(f"[METADATA_FILTER] Total metadata conditions: {len([c for c in where_conditions if safe_field_name in c])}")
+
+            acl_conditions = self._build_acl_sql_conditions(user, include_public, public_only)
+            where_conditions.extend(acl_conditions)
+            if acl_conditions:
+                logger.info(f"[ACL_FILTER] SQL scope conditions: {acl_conditions}")
             
             # Add WHERE clause if there are any conditions
             if where_conditions:
@@ -457,6 +462,25 @@ class VastDBService:
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
+
+    def _build_acl_sql_conditions(
+        self,
+        user: User,
+        include_public: bool,
+        public_only: bool,
+    ) -> list[str]:
+        """
+        Push search-scope ACL into SQL so LIMIT applies to accessible rows only.
+        Uses the same array overlap syntax as tag filters (allowed_users && ARRAY[...]).
+        """
+        safe_username = user.username.replace("'", "''")
+        user_array = f"ARRAY['{safe_username}']"
+
+        if public_only:
+            return ["is_public = TRUE"]
+        if not include_public:
+            return [f"allowed_users && {user_array}"]
+        return [f"(is_public = TRUE OR allowed_users && {user_array})"]
     
     def _calculate_time_threshold(self, time_filter: str) -> Optional[datetime]:
         """
