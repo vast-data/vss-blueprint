@@ -10,7 +10,7 @@ Deploy the VSS Blueprint web application to Kubernetes.
 
 - **VAST cluster access:**
   - Cluster name (e.g., `v1234`) - used as part of the URL
-  - Admin credentials for creating VMS manager user (see [User Authentication](../../source-code/retrieval/video-backend/README.md))
+  - VMS hostname and tenant name for user authentication (see [User Authentication](../../source-code/retrieval/video-backend/README.md))
 
 - **Storage resources:**
   - S3 buckets: `video-chunks` and `video-chunks-segments`
@@ -37,7 +37,7 @@ vim backend-secret.yaml
 | **VastDB** | `vdb_endpoint`, `vdb_bucket`, `vdb_schema`, `vdb_collection`, credentials |
 | **S3** | `s3_endpoint` (must match tenant), `s3_upload_bucket`, `s3_segments_bucket`, credentials |
 | **NVIDIA** | `nvidia_api_key`, `embedding_model`, `llm_model_name`, `embedding_local_nim`, `llm_local_nim` |
-| **VAST Admin** | `vast_admin_username`, `vast_admin_password` (for auth - see [setup](../../source-code/retrieval/video-backend/README.md#setup)) |
+| **Auth** | `vast_host`, `tenant_name`, `jwt_secret` (see [setup](../../source-code/retrieval/video-backend/README.md#user-authentication)) |
 
 ---
 

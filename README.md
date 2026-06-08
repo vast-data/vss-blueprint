@@ -55,7 +55,7 @@ The system has two main parts:
 | **Time Filtering** | Filter by upload time (presets or custom range) | [video-backend](source-code/retrieval/video-backend/README.md#gui-settings) |
 | **Video Streaming** | Capture YouTube videos to S3 | [video-streaming](source-code/video-streaming/README.md) |
 | **Batch Sync** | Copy MP4 files between S3 buckets | [video-batch-sync](source-code/video-batch-sync/README.md) |
-| **Authentication** | VAST username + S3 secret key | [video-backend](source-code/retrieval/video-backend/README.md) |
+| **Authentication** | VAST username + password | [video-backend](source-code/retrieval/video-backend/README.md) |
 
 ---
 

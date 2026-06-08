@@ -9,7 +9,7 @@ class User(BaseModel):
     """User model after authentication"""
     username: str
     email: Optional[str] = None
-    auth_type: str  # "s3_local"
+    auth_type: str  # "user"
     token_claims: dict = {}
 
     @property
