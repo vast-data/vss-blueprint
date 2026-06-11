@@ -1,9 +1,11 @@
 import logging
-import hashlib
 import vastdb
 import pyarrow as pa
 from typing import Dict, List, Any
 from datetime import datetime
+
+from common import vastdb_patch  # noqa: F401 — apply SDK patch before select/insert
+from common.segment_index import pk_for_source
 
 
 class VastDBClient:
@@ -45,6 +47,7 @@ class VastDBClient:
         ])
 
         self._initialize_connection()
+        self._schema_ready = False
 
     def _initialize_connection(self):
         """Initialize VastDB connection"""
@@ -61,6 +64,8 @@ class VastDBClient:
 
     def ensure_schema_and_table(self) -> bool:
         """Ensure schema and table exist, creating them if needed."""
+        if self._schema_ready:
+            return True
         try:
             with self.session.transaction() as tx:
                 bucket = tx.bucket(self.bucket)
@@ -81,14 +86,18 @@ class VastDBClient:
                         else:
                             raise
                 
+                self._schema_ready = True
                 return True
                 
         except Exception as e:
             logging.error(f"Error ensuring schema/table: {e}")
             return False
 
-    def store_vector(self, embedding_event: Dict[str, Any]) -> bool:
-        """Store video reasoning with vector in VastDB."""
+    def store_vector(self, embedding_event: Dict[str, Any]) -> str:
+        """Store video reasoning with vector in VastDB.
+
+        Returns: "inserted", "skipped" (duplicate / nothing to store), or "error".
+        """
         try:
             source = embedding_event.get("source", "")
             filename = embedding_event.get("filename", "")
@@ -96,13 +105,13 @@ class VastDBClient:
             embedding = embedding_event.get("embedding", [])
             
             if not reasoning_content:
-                return True
+                return "skipped"
             
             if not embedding:
                 logging.warning("No embedding vector to store")
-                return False
+                return "error"
             
-            pk = hashlib.md5(source.encode()).hexdigest()
+            pk = pk_for_source(source)
             timestamp = datetime.utcnow().isoformat() + "Z"
             
             is_public = embedding_event.get("is_public", True)
@@ -188,7 +197,7 @@ class VastDBClient:
             }
             
             if not self.ensure_schema_and_table():
-                return False
+                return "error"
             
             arrow_table = pa.Table.from_pylist([record], schema=self.schema_columns)
             
@@ -196,13 +205,27 @@ class VastDBClient:
                 bucket = tx.bucket(self.bucket)
                 schema = bucket.schema(self.schema_name)
                 table = schema.table(self.table_name)
+                if self._skip_or_dedupe_existing_segment(table, source):
+                    return "skipped"
                 table.insert(arrow_table)
             
-            return True
+            return "inserted"
             
         except Exception as e:
             logging.error(f"Error storing vector: {e}")
+            return "error"
+
+    def _skip_or_dedupe_existing_segment(self, table, source: str) -> bool:
+        """Return True when insert should be skipped. Runs inside an open transaction."""
+        existing = table.select(
+            predicate=(table["source"] == source),
+            columns=["source"],
+            internal_row_id=False,
+        ).read_all()
+        if existing.num_rows == 0:
             return False
+        logging.info("[VASTDB] Skip duplicate index: %s", source)
+        return True
 
     def close(self):
         """Close VastDB connection"""

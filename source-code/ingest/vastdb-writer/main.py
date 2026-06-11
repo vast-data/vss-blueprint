@@ -78,9 +78,11 @@ def handler(ctx, event: VastEvent):
                 table_full_name = f"{ctx.vastdb_client.bucket}.{ctx.vastdb_client.schema_name}.{ctx.vastdb_client.table_name}"
                 ctx.logger.info(f"[VASTDB] Writing to {table_full_name}")
                 
-                success = ctx.vastdb_client.store_vector(embedding_event)
+                store_result = ctx.vastdb_client.store_vector(embedding_event)
+                success = store_result != "error"
                 
                 storage_span.set_attributes({
+                    "storage_result": store_result,
                     "storage_success": success,
                     "filename": filename,
                     "vector_dimensions": len(embedding),
@@ -97,11 +99,12 @@ def handler(ctx, event: VastEvent):
                 "filename": filename,
                 "embedding_dimensions": len(embedding),
                 "embedding_model": embedding_model,
+                "storage_result": store_result,
                 "storage_success": success,
-                "status": "success" if success else "error"
+                "status": "error" if store_result == "error" else "success"
             }
             
-            ctx.logger.info(f"[COMPLETE] {filename} | segment {segment_number}/{total_segments} → {table_full_name} | public={is_public} | camera={camera_id or 'none'}")
+            ctx.logger.info(f"[COMPLETE] {filename} | segment {segment_number}/{total_segments} → {table_full_name} | {store_result} | public={is_public} | camera={camera_id or 'none'}")
             return result
             
         except Exception as e:
