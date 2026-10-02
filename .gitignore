@@ -17,6 +17,7 @@ venv/
 # Node (frontend)
 node_modules/
 dist/
+.next/
 
 # Local symlinks to shared/ingest_metadata.py (see scripts/link-ingest-metadata.sh)
 source-code/retrieval/video-backend/src/ingest_metadata.py
