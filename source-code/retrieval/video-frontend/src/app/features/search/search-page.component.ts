@@ -552,7 +552,7 @@ export class SearchPageComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!silent) {
       this.suggestionsLoading.set(true);
     }
-    this.suggestionsService.getSuggestions().subscribe({
+    this.suggestionsService.getSuggestions({ chipsOnly: true }).subscribe({
       next: (data) => {
         this.suggestionsLoading.set(false);
         if (data.prompts_table_available === false) {
