@@ -233,35 +233,25 @@ class SuggestionsService:
                 visible.append(ev)
         return visible
 
-    def get_suggestions(self, user: User) -> Dict[str, Any]:
-        rows, table_available, table_message = self._read_all_rows()
-        active = [r for r in rows if r.get("is_active")]
-        table = f"{self.settings.vdb_bucket}/{self.settings.vdb_schema}/{self._table_name}"
+    def _empty_payload(
+        self,
+        table: str,
+        *,
+        table_available: bool,
+        table_message: Optional[str],
+    ) -> Dict[str, Any]:
+        return {
+            "batch_id": None,
+            "generated_at": None,
+            "search_prompts": [],
+            "key_events": [],
+            "key_events_count": 0,
+            "table": table,
+            "prompts_table_available": table_available,
+            "table_message": table_message,
+        }
 
-        if not table_available:
-            return {
-                "batch_id": None,
-                "generated_at": None,
-                "search_prompts": [],
-                "key_events": [],
-                "key_events_count": 0,
-                "table": table,
-                "prompts_table_available": False,
-                "table_message": table_message,
-            }
-
-        if not active:
-            return {
-                "batch_id": None,
-                "generated_at": None,
-                "search_prompts": [],
-                "key_events": [],
-                "key_events_count": 0,
-                "table": table,
-                "prompts_table_available": True,
-                "table_message": None,
-            }
-
+    def _search_prompts_from_rows(self, active: List[dict]) -> List[str]:
         prompt_rows = sorted(
             [r for r in active if str(r.get("kind") or "") == "search_prompt"],
             key=lambda r: -self._ts_sort_key(r.get("generated_at")),
@@ -271,27 +261,67 @@ class SuggestionsService:
             q = str(row.get("query_text") or "").strip()
             if q:
                 raw_prompts.append(q)
-        prompts = dedupe_prompts(raw_prompts, limit=10)
+        return dedupe_prompts(raw_prompts, limit=10)[:10]
+
+    def _build_suggestions(self, user: User, *, chips_only: bool) -> Dict[str, Any]:
+        rows, table_available, table_message = self._read_all_rows()
+        table = f"{self.settings.vdb_bucket}/{self.settings.vdb_schema}/{self._table_name}"
+        if not table_available:
+            return self._empty_payload(
+                table, table_available=False, table_message=table_message
+            )
+
+        active = [r for r in rows if r.get("is_active")]
+        if not active:
+            return self._empty_payload(table, table_available=True, table_message=None)
+
+        prompts = self._search_prompts_from_rows(active)
+        newest = max(active, key=lambda r: self._ts_sort_key(r.get("generated_at")))
+        batch_id = str(newest.get("batch_id") or "") or None
+        generated_iso = normalize_generated_at(newest.get("generated_at"))
+
+        if chips_only:
+            return {
+                "batch_id": batch_id,
+                "generated_at": generated_iso,
+                "search_prompts": prompts,
+                "key_events": [],
+                "key_events_count": 0,
+                "table": table,
+                "prompts_table_available": True,
+                "table_message": None,
+            }
 
         event_rows = [r for r in active if str(r.get("kind") or "") == "key_event"]
         events = self._dedupe_key_event_rows(event_rows)
         events = self._attach_upload_timestamps(events)
         events = self._filter_events_by_user(events, user)
-
-        newest = max(active, key=lambda r: self._ts_sort_key(r.get("generated_at")))
-        batch_id = str(newest.get("batch_id") or "") or None
-        generated_iso = normalize_generated_at(newest.get("generated_at"))
-
         return {
             "batch_id": batch_id,
             "generated_at": generated_iso,
-            "search_prompts": prompts[:10],
+            "search_prompts": prompts,
             "key_events": events,
             "key_events_count": len(events),
             "table": table,
             "prompts_table_available": True,
             "table_message": None,
         }
+
+    def get_suggestions(self, user: User, *, chips_only: bool = False) -> Dict[str, Any]:
+        if chips_only:
+            return self._build_suggestions(user, chips_only=True)
+
+        from src.utils.row_cache import SUGGESTIONS_CACHE_TTL_SEC, cached_suggestions
+
+        cache_key = (
+            f"suggestions:{self.settings.vdb_bucket}:{self.settings.vdb_schema}:"
+            f"{self._table_name}:{user.normalized_username}"
+        )
+        return cached_suggestions(
+            cache_key,
+            SUGGESTIONS_CACHE_TTL_SEC,
+            lambda: self._build_suggestions(user, chips_only=False),
+        )
 
 
 _service: Optional[SuggestionsService] = None

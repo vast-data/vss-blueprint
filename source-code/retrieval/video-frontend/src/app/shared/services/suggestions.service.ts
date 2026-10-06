@@ -9,7 +9,8 @@ export class SuggestionsService {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
 
-  getSuggestions(): Observable<SuggestionsResponse> {
-    return this.http.get<SuggestionsResponse>(`${this.apiUrl}/suggestions`);
+  getSuggestions(options?: { chipsOnly?: boolean }): Observable<SuggestionsResponse> {
+    const params = options?.chipsOnly ? { chips_only: 'true' } : undefined;
+    return this.http.get<SuggestionsResponse>(`${this.apiUrl}/suggestions`, { params });
   }
 }
