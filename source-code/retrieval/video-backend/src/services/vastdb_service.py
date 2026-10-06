@@ -9,6 +9,7 @@ import pandas as pd
 import time
 import os
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 from src.config import get_settings
@@ -200,8 +201,7 @@ class VastDBService:
         if mode == "hybrid":
             if not query_visual_embedding:
                 raise ValueError("query_visual_embedding is required for hybrid search")
-            text_results, text_ms, text_perm, sql_text = self.similarity_search(
-                query_embedding=query_embedding,
+            branch_kwargs = dict(
                 top_k=top_k,
                 user=user,
                 tags=tags,
@@ -213,31 +213,40 @@ class VastDBService:
                 metadata_filters=metadata_filters,
                 min_similarity=min_similarity,
                 user_query_text=user_query_text,
-                search_mode="text",
             )
-            visual_results, visual_ms, visual_perm, sql_visual = self.similarity_search(
-                query_embedding=query_visual_embedding,
-                top_k=top_k,
-                user=user,
-                tags=tags,
-                include_public=include_public,
-                public_only=public_only,
-                time_filter=time_filter,
-                custom_start_date=custom_start_date,
-                custom_end_date=custom_end_date,
-                metadata_filters=metadata_filters,
-                min_similarity=min_similarity,
-                user_query_text=user_query_text,
-                search_mode="visual",
-            )
+            # Parallel text + visual ADBC scans (separate connections per thread).
+            t_hybrid = time.time()
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                fut_text = pool.submit(
+                    self.similarity_search,
+                    query_embedding=query_embedding,
+                    search_mode="text",
+                    **branch_kwargs,
+                )
+                fut_visual = pool.submit(
+                    self.similarity_search,
+                    query_embedding=query_visual_embedding,
+                    search_mode="visual",
+                    **branch_kwargs,
+                )
+                text_results, text_ms, text_perm, sql_text = fut_text.result()
+                visual_results, visual_ms, visual_perm, sql_visual = fut_visual.result()
+            hybrid_wall_ms = (time.time() - t_hybrid) * 1000
             merged = self._merge_hybrid_results(
                 text_results, visual_results, hybrid_text_weight, top_k
             )
             formatted_sql = (
-                f"-- Hybrid search (text weight={hybrid_text_weight:.2f})\n"
-                f"-- Text branch\n{sql_text}\n\n-- Visual branch\n{sql_visual}"
+                f"-- Hybrid search parallel (text weight={hybrid_text_weight:.2f})\n"
+                f"-- Text branch ({text_ms:.0f}ms)\n{sql_text}\n\n"
+                f"-- Visual branch ({visual_ms:.0f}ms)\n{sql_visual}"
             )
-            return merged, text_ms + visual_ms, max(text_perm, visual_perm), formatted_sql
+            logger.info(
+                "[SEARCH] hybrid parallel wall=%.0fms text=%.0fms visual=%.0fms",
+                hybrid_wall_ms,
+                text_ms,
+                visual_ms,
+            )
+            return merged, hybrid_wall_ms, max(text_perm, visual_perm), formatted_sql
 
         if mode == "visual":
             if query_visual_embedding is not None:
@@ -649,6 +658,16 @@ class VastDBService:
             reverse=True,
         )[:top_k]
 
+        video_keys = [ov for ov, _ in ranked_groups]
+        # One ADBC session: OR original_video = ... (IN is rejected by this QE).
+        t_tl = time.time()
+        segments_by_video = self.list_segments_for_videos(video_keys, user)
+        logger.info(
+            "[SEARCH] timeline hydrate videos=%d wall=%.0fms",
+            len(video_keys),
+            (time.time() - t_tl) * 1000,
+        )
+
         chunks: List[ChunkSearchResult] = []
         for original_video, matches in ranked_groups:
             matches_deduped = dedupe_by_segment_number(
@@ -660,7 +679,7 @@ class VastDBService:
             best = matches_sorted[0]
             match_by_number = {m.segment_number: m for m in matches_sorted if m.segment_number > 0}
 
-            all_segments = self.list_segments_for_video(original_video, user)
+            all_segments = segments_by_video.get(original_video) or []
             if not all_segments:
                 all_segments = [
                     {
@@ -1373,21 +1392,115 @@ class VastDBService:
             df = arrow_table.to_pandas()
             return [row.to_dict() for _, row in df.iterrows()]
 
-    def list_segments_for_video(self, original_video: str, user: User) -> List[dict]:
-        """Return accessible segment rows for a parent video, ordered by segment_number."""
-        safe_video = original_video.replace("'", "''")
-        table_path = (
-            f'"{self._adbc_connection["bucket"]}/{self._adbc_connection["schema"]}"."{self.settings.vdb_collection}"'
-        )
-        sql_query = f"""
-            SELECT
+    _SEGMENT_SELECT_COLUMNS = """
                 filename, source, reasoning_content, allowed_users, is_public, upload_timestamp,
                 duration, segment_number, total_segments, segment_start_sec, segment_end_sec,
                 original_video, tags, cosmos_model, tokens_used, cached_prompt_tokens,
                 camera_id, capture_type, location,
                 perception_json, object_classes, object_counts, max_detection_conf, perception_ok,
                 perception_source, detection_sidecar_uri, detection_frame_count, detection_count
-            FROM {table_path}
+    """
+
+    def _segment_row_to_dict(self, row) -> dict:
+        return {
+            "filename": str(row.get("filename", "")),
+            "source": str(row.get("source", "")),
+            "reasoning_content": str(row.get("reasoning_content", "")),
+            "segment_number": int(row.get("segment_number") or 0),
+            "total_segments": int(row.get("total_segments") or 0),
+            "segment_start_sec": float(row.get("segment_start_sec") or 0),
+            "segment_end_sec": float(row.get("segment_end_sec") or 0),
+            "original_video": str(row.get("original_video", "")),
+            "object_classes": str(row.get("object_classes", "")),
+            "object_counts": (
+                str(row.get("object_counts"))
+                if pd.notna(row.get("object_counts")) and row.get("object_counts") not in ("", None)
+                else ""
+            ),
+            "perception_ok": bool(row.get("perception_ok")) if pd.notna(row.get("perception_ok")) else None,
+            "perception_source": str(row.get("perception_source") or ""),
+            "detection_sidecar_uri": str(row.get("detection_sidecar_uri") or ""),
+            "detection_frame_count": int(row.get("detection_frame_count") or 0),
+            "detection_count": int(row.get("detection_count") or 0),
+            "is_public": bool(row.get("is_public", False)),
+            "upload_timestamp": row.get("upload_timestamp"),
+            "tags": self._safe_array_to_list(row.get("tags", [])),
+            "camera_id": str(row.get("camera_id") or ""),
+            "capture_type": str(row.get("capture_type") or ""),
+            "location": str(row.get("location") or ""),
+            "cosmos_model": str(row.get("cosmos_model") or ""),
+            "tokens_used": int(row.get("tokens_used") or 0) or None,
+            "cached_prompt_tokens": int(row.get("cached_prompt_tokens") or 0) or None,
+            "duration": float(row.get("duration") or 0),
+        }
+
+    def _segments_table_path(self) -> str:
+        return (
+            f'"{self._adbc_connection["bucket"]}/{self._adbc_connection["schema"]}"."{self.settings.vdb_collection}"'
+        )
+
+    def list_segments_for_video(self, original_video: str, user: User) -> List[dict]:
+        """Return accessible segment rows for a parent video, ordered by segment_number."""
+        return self.list_segments_for_videos([original_video], user).get(original_video, [])
+
+    def list_segments_for_videos(
+        self, original_videos: List[str], user: User
+    ) -> Dict[str, List[dict]]:
+        """Load timelines for many parents in one ADBC statement (OR; IN unsupported on QE)."""
+        wanted = [v.strip() for v in original_videos if v and str(v).strip()]
+        if not wanted:
+            return {}
+        seen: Set[str] = set()
+        ordered: List[str] = []
+        for v in wanted:
+            if v not in seen:
+                seen.add(v)
+                ordered.append(v)
+
+        if len(ordered) == 1:
+            where = f"original_video = '{ordered[0].replace(chr(39), chr(39) + chr(39))}'"
+        else:
+            where = " OR ".join(
+                f"original_video = '{v.replace(chr(39), chr(39) + chr(39))}'" for v in ordered
+            )
+
+        sql_query = f"""
+            SELECT
+                {self._SEGMENT_SELECT_COLUMNS}
+            FROM {self._segments_table_path()}
+            WHERE {where}
+        """
+        try:
+            df = self._execute_adbc_query(sql_query)
+        except Exception as exc:
+            logger.warning(
+                "[SEARCH] batched timeline OR failed (%s); falling back per video",
+                exc,
+            )
+            return {
+                ov: self._list_segments_for_video_single(ov, user) for ov in ordered
+            }
+
+        by_video: Dict[str, List[dict]] = {v: [] for v in ordered}
+        for _, row in df.iterrows():
+            if not self._user_has_access(row, user):
+                continue
+            seg = self._segment_row_to_dict(row)
+            ov = str(seg.get("original_video") or "").strip()
+            if ov in by_video:
+                by_video[ov].append(seg)
+        for ov in ordered:
+            by_video[ov].sort(key=lambda s: s["segment_number"])
+            by_video[ov] = dedupe_segment_dicts(by_video[ov])
+        return by_video
+
+    def _list_segments_for_video_single(self, original_video: str, user: User) -> List[dict]:
+        """Single-video timeline (fallback if batched OR fails)."""
+        safe_video = original_video.replace("'", "''")
+        sql_query = f"""
+            SELECT
+                {self._SEGMENT_SELECT_COLUMNS}
+            FROM {self._segments_table_path()}
             WHERE original_video = '{safe_video}'
         """
         df = self._execute_adbc_query(sql_query)
@@ -1395,33 +1508,7 @@ class VastDBService:
         for _, row in df.iterrows():
             if not self._user_has_access(row, user):
                 continue
-            segments.append({
-                "filename": str(row.get("filename", "")),
-                "source": str(row.get("source", "")),
-                "reasoning_content": str(row.get("reasoning_content", "")),
-                "segment_number": int(row.get("segment_number") or 0),
-                "total_segments": int(row.get("total_segments") or 0),
-                "segment_start_sec": float(row.get("segment_start_sec") or 0),
-                "segment_end_sec": float(row.get("segment_end_sec") or 0),
-                "original_video": str(row.get("original_video", "")),
-                "object_classes": str(row.get("object_classes", "")),
-                "object_counts": str(row.get("object_counts")) if pd.notna(row.get("object_counts")) and row.get("object_counts") not in ("", None) else "",
-                "perception_ok": bool(row.get("perception_ok")) if pd.notna(row.get("perception_ok")) else None,
-                "perception_source": str(row.get("perception_source") or ""),
-                "detection_sidecar_uri": str(row.get("detection_sidecar_uri") or ""),
-                "detection_frame_count": int(row.get("detection_frame_count") or 0),
-                "detection_count": int(row.get("detection_count") or 0),
-                "is_public": bool(row.get("is_public", False)),
-                "upload_timestamp": row.get("upload_timestamp"),
-                "tags": self._safe_array_to_list(row.get("tags", [])),
-                "camera_id": str(row.get("camera_id") or ""),
-                "capture_type": str(row.get("capture_type") or ""),
-                "location": str(row.get("location") or ""),
-                "cosmos_model": str(row.get("cosmos_model") or ""),
-                "tokens_used": int(row.get("tokens_used") or 0) or None,
-                "cached_prompt_tokens": int(row.get("cached_prompt_tokens") or 0) or None,
-                "duration": float(row.get("duration") or 0),
-            })
+            segments.append(self._segment_row_to_dict(row))
         segments.sort(key=lambda s: s["segment_number"])
         return dedupe_segment_dicts(segments)
 
