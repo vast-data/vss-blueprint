@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+    --card: 222 40% 9%;
+    --card-foreground: 210 40% 96%;
+    --primary: 213 94% 68%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 19% 16%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 19% 14%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 217 19% 18%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 19% 18%;
+    --input: 217 19% 18%;
+    --ring: 213 94% 68%;
+    --radius: 0.5rem;
+  }
+
+  * { @apply border-border; }
+  html, body { @apply bg-background text-foreground antialiased; }
+  body { font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; }
+}
