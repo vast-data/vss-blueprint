@@ -193,28 +193,38 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
               <span>{{ error() }}</span>
             </div>
           }
-
-          <div class="dialog-actions">
-            <button mat-button class="cancel-btn" (click)="close()">Cancel</button>
-            <button mat-raised-button class="start-btn" 
-                    (click)="startSync()" 
-                    [disabled]="!syncForm.valid || starting() || !checkResult()?.success">
-              @if (starting()) {
-                <mat-spinner diameter="20"></mat-spinner>
-              } @else {
-                <mat-icon>play_arrow</mat-icon>
-              }
-              <span>Start Batch Sync</span>
-            </button>
-          </div>
         </form>
+      </div>
+
+      <div class="dialog-actions">
+        <button mat-button class="cancel-btn" (click)="close()">Cancel</button>
+        <button mat-raised-button class="start-btn" 
+                (click)="startSync()" 
+                [disabled]="!syncForm.valid || starting() || !checkResult()?.success">
+          @if (starting()) {
+            <mat-spinner diameter="20"></mat-spinner>
+          } @else {
+            <mat-icon>play_arrow</mat-icon>
+          }
+          <span>Start Batch Sync</span>
+        </button>
       </div>
     </div>
   `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      max-height: 90vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     .batch-sync-dialog {
       width: 700px;
       max-height: 90vh;
+      min-height: 0;
+      flex: 1 1 auto;
       background: var(--bg-card);
       color: var(--text-primary);
       display: flex;
@@ -242,6 +252,7 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     .dialog-header {
+      flex: 0 0 auto;
       display: flex;
       align-items: center;
       gap: 0.75rem;
@@ -283,7 +294,9 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     .dialog-content {
       padding: 1.5rem;
       overflow-y: auto;
-      flex: 1;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: calc(90vh - 9.5rem);
     }
 
     .description {
@@ -546,11 +559,12 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     .dialog-actions {
+      flex: 0 0 auto;
       display: flex;
       justify-content: flex-end;
       gap: 1rem;
-      margin-top: 1.5rem;
-      padding-top: 1.5rem;
+      padding: 1rem 1.5rem;
+      background: var(--bg-secondary);
       border-top: 1px solid var(--border-color);
       transition: border-color 0.3s ease;
 

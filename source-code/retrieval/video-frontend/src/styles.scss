@@ -562,44 +562,83 @@ div.mat-mdc-menu-panel[role="menu"] .mat-mdc-menu-item {
 
 /* System Prompt Dialog Global Styles */
 .system-prompt-dialog-container {
+  max-height: 85vh;
+
   .mat-mdc-dialog-container {
     padding: 0 !important;
     background: transparent !important;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
     border-radius: 12px !important;
     overflow: hidden !important;
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   .mat-mdc-dialog-surface {
     background: transparent !important;
     padding: 0 !important;
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  app-system-prompt-dialog {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 85vh;
+    overflow: hidden;
   }
 }
 
 /* Advanced LLM Settings dialog container */
 .advanced-llm-settings-dialog-container {
+  max-height: 85vh;
+
   .mat-mdc-dialog-container {
     padding: 0 !important;
     background: transparent !important;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
     border-radius: 12px !important;
     overflow: hidden !important;
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   .mat-mdc-dialog-surface {
     background: transparent !important;
     padding: 0 !important;
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  app-advanced-llm-settings-dialog {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 85vh;
+    overflow: hidden;
   }
 }
 
 /* Batch Sync Dialog Global Styles */
 .batch-sync-dialog-container {
+  max-height: 90vh;
+
   .mat-mdc-dialog-container {
     padding: 0 !important;
     background: transparent !important;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
     border-radius: 12px !important;
     overflow: hidden !important;
+    max-height: 90vh !important;
+    display: flex !important;
+    flex-direction: column !important;
     border: 1px solid rgba(52, 62, 85, 0.5) !important; /* blue-400 with opacity */
   }
 
@@ -609,6 +648,18 @@ div.mat-mdc-menu-panel[role="menu"] .mat-mdc-menu-item {
     padding: 0 !important;
     border-radius: 12px !important;
     transition: background 0.3s ease;
+    max-height: 90vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  app-batch-sync-dialog {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 90vh;
+    overflow: hidden;
   }
 
   .mat-mdc-dialog-title {
@@ -616,6 +667,33 @@ div.mat-mdc-menu-panel[role="menu"] .mat-mdc-menu-item {
     margin: 0 !important;
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
+  }
+}
+
+/* Upload dialog: keep Cancel / Upload visible while the form scrolls */
+.upload-dialog {
+  max-height: 85vh;
+
+  .mat-mdc-dialog-container {
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  app-upload-dialog {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 85vh;
+    overflow: hidden;
   }
 }
 

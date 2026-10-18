@@ -21,6 +21,6 @@ DataEngine secret **name** stays `vss2-secret`; table/bucket **values** use the 
 ## Deploy
 
 1. Build image: `source-code/scripts/build-vastde-functions.sh` (includes prompt-suggester)
-2. Optional last step of the ingest deploy path (same directory and `vss2-secret`): [GUI](../../../deployments/dataengine-vss-ingest-pipeline/README.md#step-5-enrichment-pipeline-optional) or [CLI](../../../deployments/dataengine-vss-ingest-pipeline/README.md#step-6-enrichment-pipeline-optional) (`vss-enrichment-pipeline-file.yaml`).
+2. The [site deploy](../../../deployments/vss-deploy/README.md) includes this function in the one pipeline.
 
 Do **not** commit filled secret files — use `*-secret-file-template.yaml` and keep credentials local.

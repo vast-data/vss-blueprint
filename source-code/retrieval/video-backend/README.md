@@ -23,7 +23,7 @@ Users authenticate with their **VAST username + password** (same as VMS login).
 
 ### Setup
 
-Configure backend secret (`deployments/vss-k8s-application/backend-secret.yaml.example` → copy to `backend-secret.yaml`, gitignored):
+The [site deploy](../../../deployments/vss-deploy/README.md) writes this secret from `site.yaml`:
 
 ```yaml
 vast_host: "<vms-ip-or-hostname>"

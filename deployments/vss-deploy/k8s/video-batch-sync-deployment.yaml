@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: video-stream-capture
+  name: video-batch-sync
   namespace: NAMESPACE
   labels:
-    app: video-stream-capture
+    app: video-batch-sync
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: video-stream-capture
+      app: video-batch-sync
   template:
     metadata:
       labels:
-        app: video-stream-capture
+        app: video-batch-sync
     spec:
       containers:
-      - name: video-stream-capture
-        image: your.registry/vss-video-streaming:v1
+      - name: video-batch-sync
+        image: your.registry/vss-video-batch-sync:v1
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
@@ -47,13 +47,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: video-stream-capture-service
+  name: video-batch-sync-service
   namespace: NAMESPACE
   labels:
-    app: video-stream-capture
+    app: video-batch-sync
 spec:
   selector:
-    app: video-stream-capture
+    app: video-batch-sync
   ports:
   - port: 5000
     targetPort: 5000
@@ -63,23 +63,23 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: video-stream-capture-ingress
+  name: video-batch-sync-ingress
   namespace: NAMESPACE
   labels:
-    app: video-stream-capture
+    app: video-batch-sync
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   ingressClassName: nginx
   rules:
-  - host: video-streamer.CLUSTER_NAME.vastdata.com
+  - host: vss-batch-sync.INGRESS_DOMAIN
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: video-stream-capture-service
+            name: video-batch-sync-service
             port:
               number: 5000
 

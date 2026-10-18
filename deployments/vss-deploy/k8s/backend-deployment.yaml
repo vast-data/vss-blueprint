@@ -85,7 +85,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - host: video-lab.CLUSTER_NAME.vastdata.com
+  - host: vss-backend.INGRESS_DOMAIN
     http:
       paths:
       - path: /api

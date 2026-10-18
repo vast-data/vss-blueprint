@@ -26,9 +26,13 @@ source-code/video-batch-sync/src/ingest_metadata.py
 # Local secrets / certs (do not commit)
 *.pem
 *.key
+deployments/vss-deploy/k8s/backend-secret.yaml
 deployments/vss-k8s-application/backend-secret.yaml
 # Filled DataEngine secrets (keep *-secret-file-template.yaml in git)
+deployments/vss-deploy/dataengine/*secret-file.yaml
 deployments/dataengine-vss-ingest-pipeline/*secret-file.yaml
+deployments/vss-deploy/site.yaml
+deployments/vss-deploy/deploy-work/
 
 # YOLO weights downloaded on GPU host (yolo11s.pt, etc.)
 scripts/vss-blueprint-models/**/*.pt

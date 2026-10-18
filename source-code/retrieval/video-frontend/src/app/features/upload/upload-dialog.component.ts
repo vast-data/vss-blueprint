@@ -220,8 +220,24 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
       background: transparent !important;
     }
 
+    :host {
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     .upload-dialog-container {
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+
       ::ng-deep h2 {
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
         gap: 0.75rem;
@@ -238,7 +254,10 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     ::ng-deep mat-dialog-content {
-      min-height: 300px;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: calc(85vh - 9.5rem);
+      overflow-y: auto;
       padding: 0 1.5rem 1.5rem 1.5rem !important;
     }
     
@@ -653,6 +672,7 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     ::ng-deep mat-dialog-actions {
+      flex: 0 0 auto;
       padding: 1rem 1.5rem !important;
       justify-content: flex-end;
       gap: 1rem;

@@ -72,7 +72,7 @@ def from_ctx_secrets(cls, secrets: Dict[str, Any]) -> "Settings":
     return cls(**config)
 ```
 
-- Add function-specific keys to `deployments/dataengine-vss-ingest-pipeline/vss-gui-secret-file-template.yaml` (and vss2 copy).
+- Add function-specific keys to `deployments/vss-deploy/site.yaml`. The site deploy writes the live secret from that file. See `deployments/vss-deploy/README.md`.
 
 ## Standard `requirements.txt`
 
@@ -123,8 +123,7 @@ Tables include `vectors` / `vectors_visual`. Import `common/vastdb_patch.py` bef
 
 ## Pipeline YAML
 
-- Ingest: `deployments/dataengine-vss-ingest-pipeline/vss-ingest-pipeline-file.yaml`
-- Enrichment (scheduled): `deployments/dataengine-vss-ingest-pipeline/vss-enrichment-pipeline-file.yaml`
+- Site pipeline and secret: `deployments/vss-deploy/site.yaml`. See `deployments/vss-deploy/README.md`.
 - Pattern: `secrets: [vss2-secret]`, `function_deployments`, `links` (trigger → function), `triggers` with Schedule VRN.
 
 ## Reference implementations

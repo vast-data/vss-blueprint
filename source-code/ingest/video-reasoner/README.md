@@ -13,7 +13,7 @@ DataEngine function that analyzes video segments using **Cosmos-Reason2** to gen
 
 ## Configuration
 
-Configure in `deployments/dataengine-vss-ingest-pipeline/vss-gui-secret-file-template.yaml` (GUI) or `vss-cli-secret-file-template.yaml` (CLI):
+The [site deploy](../../../deployments/vss-deploy/README.md) writes these keys into the DataEngine secret from `site.yaml`:
 
 ### Cosmos-Reason2 Settings
 
@@ -90,5 +90,5 @@ Local Python dev: run [`link-ingest-metadata.sh`](../../scripts/link-ingest-meta
 
 ## Runtime
 
-- **Image**: `your.registry/vss-video-reasoner:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-dataengine-function-images))
+- **Image**: `your.registry/vss-video-reasoner:v1` (placeholder — build with `vastde build` and push; see [the site deploy](../../../deployments/vss-deploy/README.md))
 - **Trigger**: S3 bucket event on `video-chunks-segments`

@@ -753,6 +753,7 @@ export class SearchPageComponent implements OnInit, OnDestroy, AfterViewInit {
       this.uploadDialogRef = this.dialog.open(UploadDialogComponent, {
         width: '600px',
         maxWidth: '95vw',
+        maxHeight: '85vh',
         panelClass: 'upload-dialog',
         disableClose: false,
         autoFocus: true,

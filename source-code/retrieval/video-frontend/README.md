@@ -68,4 +68,4 @@ User settings in browser `localStorage`: Advanced Search & AI, system prompt, bb
 
 - Angular 18 · Angular Material · RxJS services · JWT in localStorage
 - Shared utilities: `video-hover-preview.util.ts`, `detection-overlay.util.ts`, `time.util.ts`
-- Deployed as static files behind Nginx — see [K8s deployment guide](../../../deployments/vss-k8s-application/README.md) or `source-code/scripts/build-retrieval-images.sh`
+- Deployed as static files behind Nginx — see [the site deploy](../../../deployments/vss-deploy/README.md) or `source-code/scripts/build-retrieval-images.sh`

@@ -63,6 +63,16 @@ def ffprobe_duration_sec(path: str) -> float | None:
     return value if value > 0 else None
 
 
+def is_browser_mp4(path: str) -> bool:
+    """True when the file is an ISO BMFF container (ftyp box)."""
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(12)
+    except OSError:
+        return False
+    return len(header) >= 8 and header[4:8] == b"ftyp"
+
+
 def _lazy_cv2():
     """
     Load OpenCV only when needed. The full opencv-python wheel pulls large native
@@ -377,6 +387,8 @@ class VideoCaptureService:
             
             # Prepare extra args for metadata
             extra_args = {}
+            if str(s3_key).lower().endswith(".mp4"):
+                extra_args["ContentType"] = "video/mp4"
             if metadata:
                 extra_args['Metadata'] = metadata
                 logger.info(f"Adding S3 metadata: {metadata}")
@@ -489,6 +501,73 @@ class VideoCaptureService:
         except OSError as exc:
             logger.error("Failed to replace trimmed chunk %s: %s", path, exc)
             return False
+        return True
+
+    def _ensure_browser_mp4(self, path: str) -> bool:
+        """Remux a non-MP4 capture (live yt-dlp writes MPEG-TS into a .mp4 name).
+
+        Explore plays this parent file. A transport stream makes the video element fail
+        even though the backend returns 206. Search plays the segmenter MP4s instead.
+        """
+        if is_browser_mp4(path):
+            return True
+        logger.info("Capture is not a browser MP4; remuxing: %s", os.path.basename(path))
+        tmp_path = f"{path}.browser.mp4"
+        commands = (
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                path,
+                "-c",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+                "-movflags",
+                "+faststart",
+                "-avoid_negative_ts",
+                "make_zero",
+                tmp_path,
+            ],
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                path,
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                "-avoid_negative_ts",
+                "make_zero",
+                tmp_path,
+            ],
+        )
+        wrote = False
+        for cmd in commands:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            if not self._run_ffmpeg(cmd, 120, f"browser-mp4 {os.path.basename(path)}"):
+                continue
+            if is_browser_mp4(tmp_path) and os.path.getsize(tmp_path) > 0:
+                wrote = True
+                break
+        if not wrote:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            return False
+        try:
+            os.replace(tmp_path, path)
+        except OSError as exc:
+            logger.error("Failed to replace remuxed chunk %s: %s", path, exc)
+            return False
+        logger.info("Remuxed capture to browser MP4: %s", os.path.basename(path))
         return True
 
     def _normalize_chunk_duration(self, path: str, target_sec: float) -> bool:
@@ -694,6 +773,9 @@ class VideoCaptureService:
         nominal_chunk_sec: float,
     ) -> bool:
         nominal_chunk_sec = max(0.1, float(nominal_chunk_sec))
+        if not self._ensure_browser_mp4(temp_path):
+            logger.error("Cannot remux chunk to browser MP4 for %s", filename)
+            return False
         if not self._normalize_chunk_duration(temp_path, nominal_chunk_sec):
             logger.error("Cannot normalize chunk duration for %s", filename)
             return False

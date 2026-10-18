@@ -48,5 +48,23 @@ class TtlCacheTests(unittest.TestCase):
         self.assertEqual(calls["n"], 1)
 
 
+class ClearReadCachesTests(unittest.TestCase):
+    def test_clear_drops_cached_rows(self):
+        from src.utils.row_cache import cached_table_rows, clear_read_caches
+
+        calls = {"n": 0}
+
+        def loader():
+            calls["n"] += 1
+            return [{"a": calls["n"]}]
+
+        first = cached_table_rows("delete-bust", 60.0, loader)
+        clear_read_caches()
+        second = cached_table_rows("delete-bust", 60.0, loader)
+        self.assertEqual(first, [{"a": 1}])
+        self.assertEqual(second, [{"a": 2}])
+        self.assertEqual(calls["n"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

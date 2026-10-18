@@ -241,6 +241,14 @@ export function getLLMSettings(): LLMSettings {
     </div>
   `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     .dialog-container {
       background: var(--bg-card);
       color: var(--text-primary);
@@ -249,10 +257,14 @@ export function getLLMSettings(): LLMSettings {
       display: flex;
       flex-direction: column;
       min-width: 500px;
+      max-height: 85vh;
+      min-height: 0;
+      flex: 1 1 auto;
       transition: background 0.3s ease, color 0.3s ease;
     }
 
     .dialog-header {
+      flex: 0 0 auto;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -295,6 +307,10 @@ export function getLLMSettings(): LLMSettings {
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      max-height: calc(85vh - 9.5rem);
     }
 
     .description {
@@ -461,6 +477,7 @@ export function getLLMSettings(): LLMSettings {
     }
 
     .dialog-actions {
+      flex: 0 0 auto;
       display: flex;
       justify-content: space-between;
       align-items: center;
