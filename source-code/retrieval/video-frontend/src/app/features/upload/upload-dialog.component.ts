@@ -47,7 +47,12 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
                   Add more (up to {{ maxFiles }} total)
                 }
               </p>
-              <p class="drop-hint">Up to {{ maxFiles }} files · {{ maxSizeMb }} MB per file</p>
+              <p class="drop-hint">
+                Up to {{ maxFiles }} files · {{ maxSizeMb }} MB per file
+                <mat-icon class="hint-info"
+                          (click)="$event.stopPropagation()"
+                          matTooltip="Default: each file is split into 30-second chunks">info_outline</mat-icon>
+              </p>
               @if (selectedFiles().length > 0) {
                 <ul class="selected-files-list" (click)="$event.stopPropagation()">
                   @for (file of selectedFiles(); track file.name + '-' + file.size + '-' + $index) {
@@ -304,9 +309,21 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     .drop-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
       color: var(--text-muted);
       font-size: 0.8rem;
       margin: 0 0 0.75rem 0;
+
+      .hint-info {
+        font-size: 0.95rem;
+        width: 0.95rem;
+        height: 0.95rem;
+        opacity: 0.7;
+        cursor: help;
+      }
     }
 
     .selected-files-list {

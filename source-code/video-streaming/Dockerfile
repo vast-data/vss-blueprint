@@ -43,6 +43,7 @@ RUN pip install --no-cache-dir yt-dlp \
         --version
 
 COPY shared/ingest_metadata.py ./ingest_metadata.py
+COPY shared/video_chunker.py ./video_chunker.py
 COPY video-streaming/src/web_service.py ./web_service.py
 
 RUN mkdir -p recordings

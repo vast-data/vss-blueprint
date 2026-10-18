@@ -96,18 +96,20 @@ Source file: [`source-code/shared/ingest_metadata.py`](../../shared/ingest_metad
 
 Multipart upload. Existing fields stay the same (`file`, `is_public`, `tags`, `allowed_users`, `scenario`, `custom_prompt`, `camera_id`, `capture_type`, `location`).
 
-Two optional form fields couple files into one stream, the same way streaming and batch sync already do:
+A file sent without `stream_id` is split on the server at the default chunk size (30 seconds), the same ffmpeg stream-copy used by batch sync (`source-code/shared/video_chunker.py`). A file of 30 seconds or less is stored as chunk 0 with no extra cut. The response includes `stream_id`, `chunk_count`, `object_key` (the first piece), and `object_keys`. Each piece is its own ingest object with `ingest_kind=upload_chunk`, `chunk_index`, `chunk_start_sec`, `chunk_duration_sec`, and `capture_interval`. Explore walks them with Previous/Next.
+
+Two optional form fields skip that split when the caller already cut the file:
 
 | Field | Rule |
 |-------|------|
 | `stream_id` | Shared id for every chunk of one video. Starts with a letter or number; then letters, numbers, `.`, `_`, `-`; max 128 characters. |
 | `chunk_number` | 1-based position in that stream. Required when `stream_id` is set, and `stream_id` is required when `chunk_number` is set. |
 
-Stored S3 metadata is `stream_id`, `chunk_index` (`chunk_number - 1`), and `ingest_kind=stream_chunk`. The segmenter copies those onto each segment. VastDB keeps them in `extra_metadata`.
+Stored S3 metadata is then `stream_id`, `chunk_index` (`chunk_number - 1`), and `ingest_kind=stream_chunk`. The segmenter copies those onto each segment. VastDB keeps them in `extra_metadata`.
 
 The response adds `stream_id` and `chunk_number` when they were set. Explore labels the card **Play chunk {chunk_number}/{max chunk_number}**. The total is the highest `chunk_index` in that stream plus one, so a later batch can continue at chunk 4 and the label becomes `N/4` once that file is indexed.
 
-There is no folder upload. Send the files with the same `stream_id` and sequential `chunk_number` values. The upload dialog does that from **First chunk number** (default 1) in the order the files are listed.
+There is no folder upload. Send the files with the same `stream_id` and sequential `chunk_number` values. The upload dialog does that from **First chunk number** (default 1) in the order the files are listed. The backend image needs `ffmpeg` and `ffprobe` for the server-side split.
 
 ### `DELETE /api/v1/videos?original_video=`
 

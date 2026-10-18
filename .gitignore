@@ -18,10 +18,13 @@ venv/
 node_modules/
 dist/
 
-# Local symlinks to shared/ingest_metadata.py (see scripts/link-ingest-metadata.sh)
+# Local symlinks to shared modules (see scripts/link-ingest-metadata.sh)
 source-code/retrieval/video-backend/src/ingest_metadata.py
+source-code/retrieval/video-backend/src/video_chunker.py
 source-code/video-streaming/src/ingest_metadata.py
+source-code/video-streaming/src/video_chunker.py
 source-code/video-batch-sync/src/ingest_metadata.py
+source-code/video-batch-sync/src/video_chunker.py
 
 # Local secrets / certs (do not commit)
 *.pem

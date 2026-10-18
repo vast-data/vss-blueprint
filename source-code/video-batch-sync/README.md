@@ -41,7 +41,7 @@ Access via **S3 Batch Video Sync** in the toolbar:
 1. Lists MP4 files in the source bucket/prefix
 2. For each source file (when `chunk_duration_sec > 0`):
    - Downloads to a temp file
-   - Splits with ffmpeg into `{duration}s` chunks
+   - Splits with ffmpeg into `{duration}s` chunks (`source-code/shared/video_chunker.py`, the same splitter manual upload uses)
    - Uploads each chunk to `vss-chunks` with ingest metadata, waiting `batch_size` seconds between chunks (mirrors live-stream pacing)
 3. When `chunk_duration_sec` is `0`, performs a server-side copy of the whole file instead
 4. The DataEngine ingest pipeline processes each uploaded chunk object

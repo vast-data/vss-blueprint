@@ -1,5 +1,17 @@
 # Shared cross-service modules
 
+## `video_chunker.py`
+
+Splits a finished local file into fixed-duration pieces (`DEFAULT_CHUNK_DURATION_SEC` is 30). Manual upload and batch sync both call `iter_video_chunks`. `chunk_s3_metadata` fills `stream_id`, `chunk_index`, `chunk_start_sec`, `chunk_duration_sec`, and `capture_interval`. Live streaming does not split a file here; it records the next window, then calls `chunk_s3_metadata` for the same fields.
+
+| Consumer | How it gets the module |
+|----------|-------------------------|
+| **video-backend** | Docker: `COPY shared/video_chunker.py` into `src/`. Local: imported from this directory when `src/video_chunker.py` is absent. |
+| **video-batch-sync** | Docker: `COPY shared/video_chunker.py`. Local: `shared/` is put on `sys.path` when that directory exists. |
+| **video-streaming** | Same as batch sync. Uses `chunk_s3_metadata` only. |
+
+The backend image installs `ffmpeg` (includes `ffprobe`) for the upload split.
+
 ## `ingest_metadata.py`
 
 Single source of truth for ingest/upload metadata (field labels, capture types, scenario labels, S3 mapping, custom-prompt limit).
