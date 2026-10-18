@@ -22,9 +22,17 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 import boto3
 from botocore.exceptions import ClientError
+import sys
 import uuid
+from pathlib import Path
+
+_here = Path(__file__).resolve()
+_shared = _here.parents[2] / "shared" if len(_here.parents) > 2 else None
+if _shared is not None and _shared.is_dir():
+    sys.path.insert(0, str(_shared))
 
 from ingest_metadata import build_s3_ingest_metadata
+from video_chunker import chunk_s3_metadata
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -200,18 +208,6 @@ class VideoCaptureService:
         except (TypeError, ValueError):
             return float(DEFAULT_CAPTURE_INTERVAL_SEC)
 
-    def _attach_stream_metadata(self, config, s3_metadata, chunk_index, chunk_start_sec):
-        """Add stream session indexing fields for downstream segment/VastDB rows."""
-        stream_id = config.get("stream_id")
-        if not stream_id:
-            return s3_metadata
-        s3_metadata["stream_id"] = str(stream_id)
-        s3_metadata["chunk_index"] = str(chunk_index)
-        s3_metadata["chunk_start_sec"] = f"{float(chunk_start_sec):.3f}"
-        s3_metadata["capture_interval"] = f"{self._capture_interval_sec(config):.3f}"
-        s3_metadata["ingest_kind"] = "stream_chunk"
-        return s3_metadata
-
     def _build_capture_s3_metadata(
         self,
         config,
@@ -233,11 +229,18 @@ class VideoCaptureService:
             custom_prompt=custom_prompt,
             capture_timestamp=capture_timestamp,
         )
-        s3_metadata = self._attach_stream_metadata(
-            config, s3_metadata, chunk_index, chunk_start_sec
-        )
-        if chunk_duration_sec is not None:
-            s3_metadata["chunk_duration_sec"] = f"{float(chunk_duration_sec):.3f}"
+        stream_id = config.get("stream_id")
+        if stream_id:
+            interval = self._capture_interval_sec(config)
+            duration = float(chunk_duration_sec) if chunk_duration_sec is not None else interval
+            s3_metadata.update(chunk_s3_metadata(
+                stream_id=str(stream_id),
+                chunk_index=int(chunk_index),
+                chunk_start_sec=float(chunk_start_sec),
+                chunk_duration_sec=duration,
+                capture_interval_sec=interval,
+                ingest_kind="stream_chunk",
+            ))
         return s3_metadata
         
     def is_youtube_url(self, url):

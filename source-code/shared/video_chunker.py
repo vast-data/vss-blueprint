@@ -1,4 +1,8 @@
-"""Split local MP4 files into fixed-duration chunks via ffmpeg (batch-sync ingest)."""
+"""Split a finished local video into fixed-duration chunks (ffmpeg stream copy).
+
+Used by manual upload and batch sync. Live capture does not use this module:
+it records the next window from a URL instead of cutting a finished file.
+"""
 from __future__ import annotations
 
 import json
@@ -7,7 +11,7 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,8 @@ class VideoChunk:
     chunk_index: int
     chunk_start_sec: float
     chunk_duration_sec: float
+    # False when path is the source file (short videos are not re-cut).
+    owns_path: bool = True
 
 
 def normalize_chunk_duration(raw: Optional[float]) -> float:
@@ -95,12 +101,22 @@ def iter_video_chunks(
     chunk_duration_sec: float,
     work_dir: Optional[str] = None,
 ) -> Iterator[VideoChunk]:
-    """Yield chunk files; caller must delete chunk paths when done."""
+    """Yield chunk files. Caller deletes a chunk path only when owns_path is true."""
     duration = probe_duration_sec(source_path)
     if duration is None:
         raise RuntimeError(f"Could not probe video duration: {source_path}")
 
     chunk_duration_sec = normalize_chunk_duration(chunk_duration_sec)
+    if duration <= chunk_duration_sec + 0.05:
+        yield VideoChunk(
+            path=source_path,
+            chunk_index=0,
+            chunk_start_sec=0.0,
+            chunk_duration_sec=duration,
+            owns_path=False,
+        )
+        return
+
     chunk_index = 0
     start = 0.0
     out_dir = work_dir or tempfile.mkdtemp(prefix="vss-chunks-")
@@ -117,6 +133,7 @@ def iter_video_chunks(
             chunk_index=chunk_index,
             chunk_start_sec=start,
             chunk_duration_sec=this_len,
+            owns_path=True,
         )
         chunk_index += 1
         start += chunk_duration_sec
@@ -128,3 +145,28 @@ def estimate_chunk_count(duration_sec: Optional[float], chunk_duration_sec: floa
     import math
 
     return max(1, math.ceil(duration_sec / normalize_chunk_duration(chunk_duration_sec)))
+
+
+def chunk_s3_metadata(
+    *,
+    stream_id: str,
+    chunk_index: int,
+    chunk_start_sec: float,
+    chunk_duration_sec: float,
+    capture_interval_sec: float,
+    ingest_kind: str,
+    original_filename: Optional[str] = None,
+) -> dict[str, str]:
+    """S3 metadata that couples one piece to a stream. Explore reads stream_id and chunk_index."""
+    meta = {
+        "stream_id": str(stream_id),
+        "chunk_index": str(int(chunk_index)),
+        "chunk_start_sec": f"{float(chunk_start_sec):.3f}",
+        "chunk_duration_sec": f"{float(chunk_duration_sec):.3f}",
+        "capture_interval": f"{float(capture_interval_sec):.3f}",
+        "ingest_kind": str(ingest_kind),
+    }
+    name = (original_filename or "").strip()
+    if name:
+        meta["original-filename"] = name
+    return meta

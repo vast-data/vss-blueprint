@@ -167,6 +167,116 @@ class S3Service:
             logger.error(f"Error generating upload URL: {str(e)}")
             raise
     
+    def object_key_for(
+        self,
+        username: str,
+        filename: str,
+        *,
+        chunk_index: Optional[int] = None,
+        stamp: Optional[str] = None,
+        unique_id: Optional[str] = None,
+    ) -> str:
+        """S3 key. A chunk index adds `_chunk_NNNN` so pieces of one upload stay grouped."""
+        timestamp = stamp or datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        uid = unique_id or uuid.uuid4().hex[:8]
+        file_ext = filename.split(".")[-1] if filename and "." in filename else "mp4"
+        suffix = f"_chunk_{chunk_index:04d}" if chunk_index is not None else ""
+        return f"{username}/{timestamp}_{uid}{suffix}.{file_ext}"
+
+    def upload_metadata(
+        self,
+        user: User,
+        *,
+        is_public: bool,
+        tags: list[str],
+        allowed_users: list[str],
+        scenario: str = "",
+        custom_prompt: Optional[str] = None,
+        camera_id: Optional[str] = None,
+        capture_type: Optional[str] = None,
+        location: Optional[str] = None,
+        original_filename: Optional[str] = None,
+        extra_metadata: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, str]:
+        username = user.username
+        all_allowed_users = [username]
+        if allowed_users:
+            all_allowed_users.extend([u for u in allowed_users if u and u != username])
+        return build_s3_ingest_metadata(
+            is_public=is_public,
+            allowed_users=all_allowed_users,
+            original_filename=original_filename,
+            upload_timestamp=datetime.utcnow().isoformat(),
+            tags=tags or None,
+            scenario=scenario or None,
+            custom_prompt=custom_prompt,
+            camera_id=camera_id,
+            capture_type=capture_type,
+            location=location,
+            extra=extra_metadata,
+        )
+
+    def put_local_video(
+        self,
+        user: User,
+        path: str,
+        filename: str,
+        *,
+        is_public: bool,
+        tags: list[str],
+        allowed_users: list[str],
+        scenario: str = "",
+        custom_prompt: Optional[str] = None,
+        camera_id: Optional[str] = None,
+        capture_type: Optional[str] = None,
+        location: Optional[str] = None,
+        extra_metadata: Optional[Dict[str, str]] = None,
+        chunk_index: Optional[int] = None,
+        stamp: Optional[str] = None,
+        unique_id: Optional[str] = None,
+    ) -> str:
+        """Upload a file already on disk. Returns the object key."""
+        object_key = self.object_key_for(
+            user.username,
+            filename,
+            chunk_index=chunk_index,
+            stamp=stamp,
+            unique_id=unique_id,
+        )
+        metadata = self.upload_metadata(
+            user,
+            is_public=is_public,
+            tags=tags,
+            allowed_users=allowed_users,
+            scenario=scenario,
+            custom_prompt=custom_prompt,
+            camera_id=camera_id,
+            capture_type=capture_type,
+            location=location,
+            original_filename=filename,
+            extra_metadata=extra_metadata,
+        )
+        with open(path, "rb") as handle:
+            body = handle.read()
+        logger.info(
+            "Uploading %s (%s bytes) to s3://%s/%s",
+            filename,
+            len(body),
+            self.settings.s3_upload_bucket,
+            object_key,
+        )
+        try:
+            self.client.put_object(
+                Bucket=self.settings.s3_upload_bucket,
+                Key=object_key,
+                Body=body,
+                Metadata=metadata,
+            )
+        except ClientError as exc:
+            logger.error("Error uploading file to S3: %s", exc)
+            raise
+        return object_key
+
     async def upload_file(
         self,
         file,
@@ -183,7 +293,7 @@ class S3Service:
     ) -> str:
         """
         Upload file directly to S3 (backend proxy)
-        
+
         Args:
             file: UploadFile from FastAPI
             user: Uploading user
@@ -195,69 +305,45 @@ class S3Service:
             camera_id: Optional camera identifier (for ingest pipeline)
             capture_type: Optional capture type (traffic, streets, crowds, malls, etc.)
             location: Optional area/location (for ingest pipeline)
-            
+
         Returns:
             S3 object key
         """
         try:
-            # Use username for S3 path (human-readable)
-            username = user.username
-            
-            # Generate unique object key
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            unique_id = uuid.uuid4().hex[:8]
-            file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'mp4'
-            object_key = f"{username}/{timestamp}_{unique_id}.{file_ext}"
-            
-            # NEW LOGIC: Default is_public=True, always populate allowed_users with uploader
-            # If user unchecks "Make this video private", is_public=True (default)
-            # If user checks "Make this video private", is_public=False
-            actual_is_public = is_public  # is_public from form (True by default in GUI)
-            
-            # Always add uploader to allowed_users (regardless of is_public)
-            all_allowed_users = [username]
-            if allowed_users:
-                # Add any additional users specified by uploader
-                all_allowed_users.extend([u for u in allowed_users if u and u != username])
-            
-            # Prepare metadata (keys match ingest video-segmenter S3ObjectMetadataModel)
-            metadata = build_s3_ingest_metadata(
-                is_public=actual_is_public,
-                allowed_users=all_allowed_users,
-                original_filename=file.filename,
-                upload_timestamp=datetime.utcnow().isoformat(),
-                tags=tags or None,
-                scenario=scenario or None,
+            object_key = self.object_key_for(user.username, file.filename or "video.mp4")
+            metadata = self.upload_metadata(
+                user,
+                is_public=is_public,
+                tags=tags,
+                allowed_users=allowed_users,
+                scenario=scenario,
                 custom_prompt=custom_prompt,
                 camera_id=camera_id,
                 capture_type=capture_type,
                 location=location,
-                extra=extra_metadata,
+                original_filename=file.filename,
+                extra_metadata=extra_metadata,
             )
-            
+
             logger.info(f"Uploading {file.filename} to s3://{self.settings.s3_upload_bucket}/{object_key}")
             logger.info(f"Metadata to set: {metadata}")
-            
-            # Ensure file pointer is at the beginning
+
             await file.seek(0)
-            
-            # Read the entire file content
             file_content = await file.read()
             logger.info(f"Read {len(file_content)} bytes from uploaded file")
-            
-            # Upload file to S3 using put_object (for in-memory upload)
+
             response = self.client.put_object(
                 Bucket=self.settings.s3_upload_bucket,
                 Key=object_key,
                 Body=file_content,
                 Metadata=metadata
             )
-            
+
             logger.info(f"File uploaded to S3: {object_key} ({len(file_content)} bytes)")
             logger.info(f"S3 put_object response ETag: {response.get('ETag')}")
-            
+
             return object_key
-            
+
         except ClientError as e:
             logger.error(f"Error uploading file to S3: {str(e)}")
             raise

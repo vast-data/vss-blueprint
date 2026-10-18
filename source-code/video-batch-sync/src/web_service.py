@@ -16,8 +16,15 @@ import os
 import tempfile
 import uuid
 import shutil
+import sys
 from datetime import datetime
+from pathlib import Path
 from flask import Flask, request, jsonify
+
+_here = Path(__file__).resolve()
+_shared = _here.parents[2] / "shared" if len(_here.parents) > 2 else None
+if _shared is not None and _shared.is_dir():
+    sys.path.insert(0, str(_shared))
 import boto3
 from botocore.exceptions import ClientError
 from typing import Dict, List, Optional, Tuple
@@ -26,6 +33,7 @@ from boto3.s3.transfer import TransferConfig
 from ingest_metadata import build_s3_ingest_metadata
 from video_chunker import (
     DEFAULT_CHUNK_DURATION_SEC,
+    chunk_s3_metadata,
     estimate_chunk_count,
     iter_video_chunks,
     normalize_chunk_duration,
@@ -272,15 +280,15 @@ class BatchSyncService:
         original_filename: str,
     ) -> Dict[str, str]:
         meta = dict(base_metadata)
-        meta.update({
-            "stream_id": stream_id,
-            "chunk_index": str(chunk_index),
-            "chunk_start_sec": f"{chunk_start_sec:.3f}",
-            "chunk_duration_sec": f"{chunk_duration_sec:.3f}",
-            "capture_interval": f"{capture_interval_sec:.3f}",
-            "ingest_kind": "batch_chunk",
-            "original-filename": original_filename,
-        })
+        meta.update(chunk_s3_metadata(
+            stream_id=stream_id,
+            chunk_index=chunk_index,
+            chunk_start_sec=chunk_start_sec,
+            chunk_duration_sec=chunk_duration_sec,
+            capture_interval_sec=capture_interval_sec,
+            ingest_kind="batch_chunk",
+            original_filename=original_filename,
+        ))
         return meta
 
     def _should_split_chunks(self, config: dict) -> bool:
@@ -422,10 +430,11 @@ class BatchSyncService:
                         'error': str(exc),
                     })
                 finally:
-                    try:
-                        os.remove(chunk.path)
-                    except OSError:
-                        pass
+                    if chunk.owns_path:
+                        try:
+                            os.remove(chunk.path)
+                        except OSError:
+                            pass
 
             if chunks_produced == 0 and job.status == 'running':
                 job.failed_files += 1

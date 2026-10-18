@@ -14,7 +14,7 @@ COPY video-batch-sync/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ingest_metadata.py ./ingest_metadata.py
-COPY video-batch-sync/src/video_chunker.py ./video_chunker.py
+COPY shared/video_chunker.py ./video_chunker.py
 COPY video-batch-sync/src/web_service.py ./web_service.py
 
 ENV PYTHONUNBUFFERED=1
