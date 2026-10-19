@@ -1,3 +1,5 @@
+import threading
+
 from opentelemetry import trace
 from vast_runtime.vast_event import VastEvent  # type: ignore
 
@@ -13,6 +15,11 @@ from common.handler_utils import (
     prepare_metadata,
 )
 from common.clients import S3Client
+
+# One MoviePy/ffmpeg job at a time. A manual upload publishes every chunk at once, and the
+# runtime will run those events together in this process (containerConcurrency 20). Streaming
+# and batch publish the next chunk only after the previous upload, so they already arrive one by one.
+_CHUNK_LOCK = threading.Lock()
 
 
 def init(ctx):
@@ -72,130 +79,146 @@ def handler(ctx, event: VastEvent):
                 ctx.logger.info(f"[SKIP] {key} | reason={complete_reason}")
                 return {"status": "skipped", "reason": complete_reason}
 
-            with ctx.tracer.start_as_current_span("S3 Download") as download_span:
-                video_content = ctx.s3_client.download_file(bucket, key)
-                size_mb = len(video_content) / (1024 * 1024)
-                ctx.logger.info(f"[DOWNLOAD] {filename} | {size_mb:.2f}MB | ext={file_extension}")
-                download_span.set_attributes({
-                    "bucket": bucket,
-                    "key": key,
-                    "file_size_bytes": len(video_content),
-                    "file_extension": file_extension
-                })
-
-            with ctx.tracer.start_as_current_span("Metadata Extraction") as metadata_span:
-                original_metadata = ctx.s3_client.head_object(bucket=bucket, key=key)
-                raw_metadata = original_metadata.get("Metadata", {})
-                s3_metadata = S3ObjectMetadataModel(**raw_metadata)
-                
-                is_public = s3_metadata.get_is_public_bool() if s3_metadata.is_public else True
-                allowed_users = s3_metadata.get_allowed_users_list() if s3_metadata.allowed_users else []
-                tags = s3_metadata.get_tags_list()
-
-                chunk_duration_sec = None
-                chunk_duration_raw = raw_metadata.get("chunk_duration_sec")
-                capture_interval_raw = raw_metadata.get("capture_interval")
-                if chunk_duration_raw not in (None, ""):
-                    try:
-                        chunk_duration_sec = float(chunk_duration_raw)
-                    except (TypeError, ValueError):
-                        chunk_duration_sec = None
-                if chunk_duration_sec is None and capture_interval_raw not in (None, ""):
-                    try:
-                        chunk_duration_sec = float(capture_interval_raw)
-                    except (TypeError, ValueError):
-                        chunk_duration_sec = None
-                
-                # CLI/tool uploads default to public
-                if not s3_metadata.is_public and not s3_metadata.allowed_users:
-                    is_public = True
-                    allowed_users = []
-                
-                scenario = s3_metadata.scenario or ""
-                ctx.logger.info(f"[METADATA] public={is_public} | camera={s3_metadata.camera_id or 'none'} | type={s3_metadata.capture_type or 'none'} | area={s3_metadata.location or 'none'} | scenario={scenario or 'none'}")
-                
-                metadata_span.set_attributes({
-                    "is_public": str(is_public),
-                    "allowed_users_count": len(allowed_users),
-                    "tags_count": len(tags),
-                    "tags": ",".join(tags) if tags else "",
-                    "source": source,
-                    "filename": filename,
-                    "camera_id": s3_metadata.camera_id or "",
-                    "capture_type": s3_metadata.capture_type or "",
-                    "location": s3_metadata.location or "",
-                    "scenario": scenario
-                })
-
-            successful_uploads = 0
-            failed_uploads = 0
-            
-            def upload_segment_callback(segment_info, original_filename):
-                nonlocal successful_uploads, failed_uploads
-                segment_content, segment_number, total_segments, duration, start_time, end_time = segment_info
-                
-                segment_key = get_segment_key(original_filename, segment_number, total_segments)
-                segment_metadata = prepare_metadata(
-                    original_metadata,
-                    segment_number,
-                    total_segments,
-                    duration,
-                    source,
-                    start_time,
-                    end_time,
-                    float(ctx.processor.segment_duration),
+            ctx.logger.info(f"[QUEUE] {filename} waiting for the segmenter")
+            with _CHUNK_LOCK:
+                return _segment_one(
+                    ctx,
+                    bucket=bucket,
+                    key=key,
+                    source=source,
+                    filename=filename,
+                    file_extension=file_extension,
+                    output_bucket=output_bucket,
                 )
-                
-                if is_public and not allowed_users:
-                    segment_metadata["is-public"] = "true"
-                    segment_metadata["allowed-users"] = ""
-                
-                success = ctx.s3_client.upload_bytes(
-                    segment_content, output_bucket, segment_key, segment_metadata
-                )
-                
-                if success:
-                    successful_uploads += 1
-                else:
-                    failed_uploads += 1
-                    ctx.logger.error(f"Failed to upload segment {segment_number}/{total_segments}")
 
-            with ctx.tracer.start_as_current_span("Video Segmentation and Upload") as video_span:
-                ctx.processor.process_video_segments(
-                    video_content,
-                    filename,
-                    upload_segment_callback,
-                    max_duration_sec=chunk_duration_sec,
-                )
-                total_segments = successful_uploads + failed_uploads
-                
-                video_span.set_attributes({
-                    "segments_count": total_segments,
-                    "segment_duration": ctx.processor.segment_duration,
-                    "output_bucket": output_bucket,
-                    "successful_uploads": successful_uploads,
-                    "failed_uploads": failed_uploads
-                })
-
-            result = {
-                "source": source,
-                "original_video": source,
-                "file_type": file_extension,
-                "segments_created": total_segments,
-                "successful_uploads": successful_uploads,
-                "failed_uploads": failed_uploads,
-                "output_bucket": output_bucket,
-                "segment_duration": ctx.processor.segment_duration,
-                "status": "success"
-            }
-            
-            ctx.logger.info(f"[COMPLETE] {filename} → {output_bucket} | {successful_uploads}/{total_segments} segments | {ctx.processor.segment_duration}s each")
-            return result
-            
         except Exception as e:
             handler_span.set_attribute("error", True)
             handler_span.set_attribute("error.message", str(e))
             handler_span.record_exception(e)
             ctx.logger.error(f"Segmentation failed: {e}")
             return {"status": "error", "error": str(e)}
+
+
+def _segment_one(ctx, *, bucket, key, source, filename, file_extension, output_bucket):
+    """Download and cut one chunk. Caller holds _CHUNK_LOCK."""
+    ctx.logger.info(f"[QUEUE] {filename} started")
+    with ctx.tracer.start_as_current_span("S3 Download") as download_span:
+        video_content = ctx.s3_client.download_file(bucket, key)
+        size_mb = len(video_content) / (1024 * 1024)
+        ctx.logger.info(f"[DOWNLOAD] {filename} | {size_mb:.2f}MB | ext={file_extension}")
+        download_span.set_attributes({
+            "bucket": bucket,
+            "key": key,
+            "file_size_bytes": len(video_content),
+            "file_extension": file_extension
+        })
+
+    with ctx.tracer.start_as_current_span("Metadata Extraction") as metadata_span:
+        original_metadata = ctx.s3_client.head_object(bucket=bucket, key=key)
+        raw_metadata = original_metadata.get("Metadata", {})
+        s3_metadata = S3ObjectMetadataModel(**raw_metadata)
+
+        is_public = s3_metadata.get_is_public_bool() if s3_metadata.is_public else True
+        allowed_users = s3_metadata.get_allowed_users_list() if s3_metadata.allowed_users else []
+        tags = s3_metadata.get_tags_list()
+
+        chunk_duration_sec = None
+        chunk_duration_raw = raw_metadata.get("chunk_duration_sec")
+        capture_interval_raw = raw_metadata.get("capture_interval")
+        if chunk_duration_raw not in (None, ""):
+            try:
+                chunk_duration_sec = float(chunk_duration_raw)
+            except (TypeError, ValueError):
+                chunk_duration_sec = None
+        if chunk_duration_sec is None and capture_interval_raw not in (None, ""):
+            try:
+                chunk_duration_sec = float(capture_interval_raw)
+            except (TypeError, ValueError):
+                chunk_duration_sec = None
+
+        # CLI/tool uploads default to public
+        if not s3_metadata.is_public and not s3_metadata.allowed_users:
+            is_public = True
+            allowed_users = []
+
+        scenario = s3_metadata.scenario or ""
+        ctx.logger.info(f"[METADATA] public={is_public} | camera={s3_metadata.camera_id or 'none'} | type={s3_metadata.capture_type or 'none'} | area={s3_metadata.location or 'none'} | scenario={scenario or 'none'}")
+
+        metadata_span.set_attributes({
+            "is_public": str(is_public),
+            "allowed_users_count": len(allowed_users),
+            "tags_count": len(tags),
+            "tags": ",".join(tags) if tags else "",
+            "source": source,
+            "filename": filename,
+            "camera_id": s3_metadata.camera_id or "",
+            "capture_type": s3_metadata.capture_type or "",
+            "location": s3_metadata.location or "",
+            "scenario": scenario
+        })
+
+    successful_uploads = 0
+    failed_uploads = 0
+
+    def upload_segment_callback(segment_info, original_filename):
+        nonlocal successful_uploads, failed_uploads
+        segment_content, segment_number, total_segments, duration, start_time, end_time = segment_info
+
+        segment_key = get_segment_key(original_filename, segment_number, total_segments)
+        segment_metadata = prepare_metadata(
+            original_metadata,
+            segment_number,
+            total_segments,
+            duration,
+            source,
+            start_time,
+            end_time,
+            float(ctx.processor.segment_duration),
+        )
+
+        if is_public and not allowed_users:
+            segment_metadata["is-public"] = "true"
+            segment_metadata["allowed-users"] = ""
+
+        success = ctx.s3_client.upload_bytes(
+            segment_content, output_bucket, segment_key, segment_metadata
+        )
+
+        if success:
+            successful_uploads += 1
+        else:
+            failed_uploads += 1
+            ctx.logger.error(f"Failed to upload segment {segment_number}/{total_segments}")
+
+    with ctx.tracer.start_as_current_span("Video Segmentation and Upload") as video_span:
+        ctx.processor.process_video_segments(
+            video_content,
+            filename,
+            upload_segment_callback,
+            max_duration_sec=chunk_duration_sec,
+        )
+        total_segments = successful_uploads + failed_uploads
+
+        video_span.set_attributes({
+            "segments_count": total_segments,
+            "segment_duration": ctx.processor.segment_duration,
+            "output_bucket": output_bucket,
+            "successful_uploads": successful_uploads,
+            "failed_uploads": failed_uploads
+        })
+
+    result = {
+        "source": source,
+        "original_video": source,
+        "file_type": file_extension,
+        "segments_created": total_segments,
+        "successful_uploads": successful_uploads,
+        "failed_uploads": failed_uploads,
+        "output_bucket": output_bucket,
+        "segment_duration": ctx.processor.segment_duration,
+        "status": "success"
+    }
+
+    ctx.logger.info(f"[COMPLETE] {filename} → {output_bucket} | {successful_uploads}/{total_segments} segments | {ctx.processor.segment_duration}s each")
+    return result
 

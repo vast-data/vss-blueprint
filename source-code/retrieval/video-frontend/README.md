@@ -14,7 +14,7 @@ Three top-level modes share the same scope pills (**All Videos** / **My Videos**
 
 ### Search
 
-- Empty state shows **search suggestions** from `GET /api/v1/suggestions` (prompt-suggester grounded rephrases → `vss-prompts-events`). Clicking a suggestion fills the search bar only.
+- Empty state shows **search suggestions** from `GET /api/v1/suggestions` (prompt-suggester grounded rephrases → `vss-events-collection`). Clicking a suggestion fills the search bar only.
 - Clip cards: **upload time** badge (config timezone), **% match** badge, match timeline with segment jumps, reasoning caption and class chips.
 - Search animation phases follow the live request; model names come from `GET /api/v1/config` (Cosmos-Embed1, Cosmos-Reason2).
 - After a search, results persist when navigating away and back.

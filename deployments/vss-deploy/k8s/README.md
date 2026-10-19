@@ -18,7 +18,7 @@ Use this directory only when the storage user, buckets, topic, and pipeline alre
 
 - **Storage resources:**
   - S3 buckets: `vss-chunks` and `vss-chunks-segments` (segmenter writes `{upload_bucket}-segments` by default)
-  - VastDB bucket: `vss-db`, schema `vss-schema`, tables `vss-collection` and `vss-prompts-events`
+  - VastDB bucket: `vss-vastdb-bucket`, schema `vss-schema`, tables `vss-collection` and `vss-events-collection`
 
 - **AI/ML services:**
   - Cosmos-Embed1 NIM (hybrid search embeddings)
@@ -43,7 +43,7 @@ vim backend-secret.yaml
 
 | Section | Key Settings |
 |---------|--------------|
-| **VastDB** | `vdb_endpoint`, `vdb_bucket` (`vss-db`), `vdb_schema` (`vss-schema`), `vdb_collection` (`vss-collection`), `vdb_prompts_collection` (`vss-prompts-events`), credentials |
+| **VastDB** | `vdb_endpoint`, `vdb_bucket` (`vss-vastdb-bucket`), `vdb_schema` (`vss-schema`), `vdb_collection` (`vss-collection`), `vdb_prompts_collection` (`vss-events-collection`), credentials |
 | **S3** | `s3_endpoint` (must match tenant), `s3_upload_bucket` (`vss-chunks`), `s3_segments_bucket` (`vss-chunks-segments`), credentials |
 | **Cosmos-Embed1** | `embedding_host`, `embedding_port`, `embedding_model`, `embedding_local_nim`, `nvidia_api_key` |
 | **Cosmos-Reason2** | `cosmos_host`, `cosmos_port`, `cosmoshttpscheme`, `cosmos_model`, `synthesis_*` |

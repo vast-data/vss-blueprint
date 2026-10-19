@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Build and push DataEngine (vastde) pipeline function images.
+# Build and push DataEngine function images.
+# Aligned with DataEngine 5.5.0-sp2: vastde v5.5.0-sp2 and
+# builder vastdataorg/vast-builder:v5.5.0-sp2. TAG is the function image tag.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,21 +14,19 @@ TAG="${TAG:-v1}"
 
 build_and_push() {
   local dir="$1"
-  local func_name="$2"
-  local image_name="${3:-$func_name}"
+  local name="$2"
 
-  echo "==> $func_name ($dir)"
-  cd "$ROOT/$dir"
-  vastde functions build "$func_name"
-  docker tag "$func_name" "$REGISTRY/$image_name:$TAG"
-  docker push "$REGISTRY/$image_name:$TAG"
+  echo "==> ${name}"
+  (cd "$ROOT/$dir" && vastde functions build "${name}") || return 1
+  docker tag "${name}:latest" "${REGISTRY}/${name}:${TAG}" || return 1
+  docker push "${REGISTRY}/${name}:${TAG}"
 }
 
-build_and_push ingest/video-segmenter vss-video-segmenter
-build_and_push ingest/video-detector   vss-video-detector
-build_and_push ingest/video-reasoner   vss-video-reasoner
-build_and_push ingest/video-embedder   vss-video-embedder
-build_and_push ingest/vastdb-writer    vss-video-vastdb
-build_and_push enrichment/prompt-suggester vss-video-events
+build_and_push ingest/video-segmenter vss2-segmenter
+build_and_push ingest/video-detector vss2-detector
+build_and_push ingest/video-reasoner vss2-reasoner
+build_and_push ingest/video-embedder vss2-embedder
+build_and_push ingest/vastdb-writer vss2-vastdb
+build_and_push enrichment/prompt-suggester vss2-events
 
 echo "Done. Pushed vastde functions (tag=$TAG) to $REGISTRY"

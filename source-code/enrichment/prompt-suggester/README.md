@@ -1,6 +1,6 @@
 # Prompt suggester (DataEngine enrichment)
 
-Reads recent `reasoning_content` from `vss-collection`, calls **Cosmos-Reason2**, and writes grounded search prompts + key events to `vss-prompts-events`. Served by video-backend `GET /api/v1/suggestions` and shown in the UI:
+Reads recent `reasoning_content` from `vss-collection`, calls **Cosmos-Reason2**, and writes grounded search prompts + key events to `vss-events-collection`. Served by video-backend `GET /api/v1/suggestions` and shown in the UI:
 
 - **Search** — suggestion chips on empty state
 - **Dashboard** — key events table with in-place segment preview
@@ -14,8 +14,8 @@ DataEngine secret **name** stays `vss2-secret`; table/bucket **values** use the 
 | Key | Example value | Purpose |
 |-----|---------------|---------|
 | `vdbcollection` | `vss-collection` | Source segments |
-| `vdbpromptscollection` | `vss-prompts-events` | Output table |
-| `vdbbucket` / `vdbschema` | `vss-db` / `vss-schema` | VastDB location |
+| `vdbpromptscollection` | `vss-events-collection` | Output table |
+| `vdbbucket` / `vdbschema` | `vss-vastdb-bucket` / `vss-schema` | VastDB location |
 | `cosmos_host` / `cosmos_port` | same as video-reasoner | Cosmos-Reason2 API |
 
 ## Deploy

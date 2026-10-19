@@ -90,5 +90,5 @@ Local Python dev: run [`link-ingest-metadata.sh`](../../scripts/link-ingest-meta
 
 ## Runtime
 
-- **Image**: `your.registry/vss-video-reasoner:v1` (placeholder — build with `vastde build` and push; see [the site deploy](../../../deployments/vss-deploy/README.md))
+- **Image**: `<registry-host>/<path>/vss2-reasoner:<image-tag>` (build from `source-code`; see [the site deploy](../../../deployments/vss-deploy/README.md#get-vastde-and-roll-function-images))
 - **Trigger**: S3 bucket event on `video-chunks-segments`

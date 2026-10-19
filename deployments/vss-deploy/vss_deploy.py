@@ -656,6 +656,13 @@ def load_keys():
     return None
 
 
+def require_keys(why: str) -> dict:
+    keys = load_keys()
+    if not keys:
+        raise SystemExit(f"cannot {why}: deploy-work/storage-keys.yaml is missing")
+    return keys
+
+
 def ensure_user_group(vms: Vms, user: dict, group_name: str, gid) -> dict:
     """Membership is the gids list. The groups field on create is ignored by VMS."""
     if group_name in (user.get("groups") or []):
@@ -718,9 +725,8 @@ def deploy_storage(ctx: dict) -> dict:
         (buckets["segments"], ["S3"]),
         (buckets["database"], ["S3", "DATABASE"]),
     ]
+    have = set(views_by_bucket(vms, ctx["tenant_id"]))
     for bucket, protocols in specs:
-        code, listed = vms.call("GET", f"/views/?tenant_id={ctx['tenant_id']}")
-        have = {row.get("bucket") for row in rows_of(listed)}
         if bucket in have:
             say(f"bucket {bucket} exists", "32")
             continue
@@ -734,36 +740,57 @@ def deploy_storage(ctx: dict) -> dict:
             "policy_id": ctx["policy_id"],
             "tenant_id": ctx["tenant_id"],
         })
-        if code not in (200, 201):
-            raise SystemExit(f"create view {bucket} failed HTTP {code}: {redact(str(data)[:400])}")
+        vms_expect(code, data, f"create view {bucket}", ok=(200, 201))
         say(f"  view id {data.get('id')}", "32")
 
     topic = site["dataengine"]["topic"]
     broker = site["dataengine"]["broker"]
-    code, out = run(["vastde", "topics", "list", "--database-name", broker, "-o", "json"])
-    names = [t.get("name") for t in rows_of(json_from_cli(out))] if code == 0 else []
-    if topic in names:
+    if topic in topic_names(broker):
         say(f"topic {topic} exists", "32")
     else:
         say(f"create topic {topic} on {broker}", "1;36")
         code, data = vms.call("POST", "/topics/", {"database_name": broker, "name": topic})
-        if code not in (200, 201):
-            raise SystemExit(f"create topic failed HTTP {code}: {redact(str(data)[:400])}")
+        vms_expect(code, data, "create topic", ok=(200, 201))
     return keys
 
 
-def cli_exists(kind: str, name: str) -> bool:
-    code, out = run(["vastde", kind, "list", "-o", "json"], timeout=40)
+def vms_expect(code: int, data, what: str, ok: tuple[int, ...] = (200, 202, 204)) -> None:
+    if code not in ok:
+        raise SystemExit(f"{what} failed HTTP {code}: {redact(str(data)[:300])}")
+
+
+def views_by_bucket(vms: Vms, tenant_id) -> dict:
+    code, listed = vms.call("GET", f"/views/?tenant_id={tenant_id}")
+    vms_expect(code, listed, "list views", ok=(200,))
+    return {row.get("bucket"): row for row in rows_of(listed)}
+
+
+def topic_names(broker: str) -> set[str]:
+    code, out = run(["vastde", "topics", "list", "--database-name", broker, "-o", "json"], timeout=60)
     if code != 0:
-        raise SystemExit(f"vastde {kind} list failed: {redact(out)[:300]}")
-    text = out.lower()
-    if "no " in text and "available" in text:
-        return False
+        return set()
     try:
-        data = rows_of(json_from_cli(out))
+        return {row.get("name") for row in rows_of(json_from_cli(out)) if row.get("name")}
     except Exception:
-        return False
-    return any(row.get("name") == name for row in data)
+        return set()
+
+
+def cli_names(kind: str, *, required: bool = False) -> set[str]:
+    """One list per kind. Deploy asks once before its create loop; cleanup asks once before deletes."""
+    code, out = run(["vastde", kind, "list", "-o", "json"], timeout=60)
+    if code != 0:
+        message = redact(out)[:300]
+        if required:
+            raise SystemExit(f"vastde {kind} list failed: {message}")
+        say(f"vastde {kind} list failed: {message}", "1;31")
+        return set()
+    lowered = out.lower()
+    if "no " in lowered and "available" in lowered:
+        return set()
+    try:
+        return {row.get("name") for row in rows_of(json_from_cli(out)) if row.get("name")}
+    except Exception:
+        return set()
 
 
 def run_ok(cmd: list[str], timeout: int = 120) -> None:
@@ -784,9 +811,10 @@ def deploy_dataengine(site: dict, keys: dict) -> None:
     broker = de["broker"]
     topic = de["topic"]
     registry = de["registry"]
+    existing = cli_names("triggers", required=True)
     for trig in site["pipeline"]["triggers"]:
         name = trig["name"]
-        if cli_exists("triggers", name):
+        if name in existing:
             say(f"trigger {name} exists", "32")
             continue
         cmd = ["vastde", "triggers", "create", "--name", name, "--broker-name", broker, "--broker-type", "Internal", "--topic", topic]
@@ -805,9 +833,10 @@ def deploy_dataengine(site: dict, keys: dict) -> None:
         run_ok(cmd)
 
     images = site["images"]["functions"]
+    existing = cli_names("functions", required=True)
     for fn in site["pipeline"]["functions"]:
         name = fn["name"]
-        if cli_exists("functions", name):
+        if name in existing:
             say(f"function {name} exists", "32")
             continue
         spec = images.get(name) or {}
@@ -826,7 +855,7 @@ def deploy_dataengine(site: dict, keys: dict) -> None:
     secret_path = write_ingest_secret(site, keys)
     manifest_path = write_pipeline_manifest(site)
     pipeline = de["pipeline"]
-    if cli_exists("pipelines", pipeline):
+    if pipeline in cli_names("pipelines", required=True):
         say(f"deploy existing pipeline {pipeline}", "1;36")
         run_ok(["vastde", "pipelines", "deploy", pipeline], timeout=180)
         return
@@ -1106,17 +1135,6 @@ K8S_OBJECTS = [
 ]
 
 
-def cli_names(kind: str) -> set[str]:
-    code, out = run(["vastde", kind, "list", "-o", "json"], timeout=60)
-    if code != 0:
-        say(f"vastde {kind} list failed: {redact(out)[:200]}", "1;31")
-        return set()
-    try:
-        return {row.get("name") for row in rows_of(json_from_cli(out))}
-    except Exception:
-        return set()
-
-
 def run_delete(cmd: list[str], timeout: int = 180) -> None:
     step(" ".join(cmd[:6]))
     proc = subprocess.run(cmd, input="y\n", text=True, capture_output=True, timeout=timeout)
@@ -1127,8 +1145,175 @@ def run_delete(cmd: list[str], timeout: int = 180) -> None:
         raise SystemExit(f"delete failed: {' '.join(cmd[:4])}")
 
 
-def cleanup_site(site: dict) -> None:
-    """Remove the objects this site file owns. The namespace stays; it is attached to DataEngine."""
+def sh_quote(value: str) -> str:
+    return "'" + str(value).replace("'", "'\"'\"'") + "'"
+
+
+REMOTE_EMPTY_PY = r"""
+import hashlib, hmac, os, ssl, urllib.error, urllib.request
+from datetime import datetime, timezone
+from urllib.parse import quote, urlparse
+from xml.etree import ElementTree as ET
+
+def local(tag):
+    return tag.rsplit("}", 1)[-1]
+
+def sign(method, url, headers, payload, access, secret):
+    parsed = urlparse(url)
+    amz = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    day = amz[:8]
+    payload_hash = hashlib.sha256(payload).hexdigest()
+    signed = {
+        "host": parsed.netloc,
+        "x-amz-content-sha256": payload_hash,
+        "x-amz-date": amz,
+    }
+    signed.update({k.lower(): v for k, v in headers.items()})
+    names = sorted(signed)
+    canonical = "\n".join(f"{n}:{signed[n]}" for n in names)
+    request = "\n".join([
+        method,
+        quote(parsed.path or "/", safe="/%"),
+        parsed.query,
+        canonical + "\n",
+        ";".join(names),
+        payload_hash,
+    ])
+    scope = f"{day}/us-east-1/s3/aws4_request"
+    string = "\n".join(["AWS4-HMAC-SHA256", amz, scope, hashlib.sha256(request.encode()).hexdigest()])
+    key = ("AWS4" + secret).encode()
+    for part in (day, "us-east-1", "s3", "aws4_request"):
+        key = hmac.new(key, part.encode(), hashlib.sha256).digest()
+    sig = hmac.new(key, string.encode(), hashlib.sha256).hexdigest()
+    out = {
+        "Host": parsed.netloc,
+        "x-amz-content-sha256": payload_hash,
+        "x-amz-date": amz,
+        "Authorization": (
+            f"AWS4-HMAC-SHA256 Credential={access}/{scope}, "
+            f"SignedHeaders={';'.join(names)}, Signature={sig}"
+        ),
+    }
+    out.update(headers)
+    return out
+
+def call(method, url, headers, payload):
+    access = os.environ["AWS_ACCESS_KEY_ID"]
+    secret = os.environ["AWS_SECRET_ACCESS_KEY"]
+    signed = sign(method, url, headers, payload, access, secret)
+    req = urllib.request.Request(url, data=payload or None, headers=signed, method=method)
+    ctx = ssl._create_unverified_context()
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=120) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+def keys_of(body):
+    root = ET.fromstring(body)
+    found = []
+    token = ""
+    truncated = False
+    for node in root.iter():
+        name = local(node.tag)
+        if name == "Contents":
+            for child in list(node):
+                if local(child.tag) == "Key" and child.text:
+                    found.append(child.text)
+        elif name == "IsTruncated":
+            truncated = (node.text or "").lower() == "true"
+        elif name == "NextContinuationToken" and node.text:
+            token = node.text
+    return found, truncated, token
+
+def main():
+    endpoint = os.environ["S3_ENDPOINT"].rstrip("/")
+    buckets = [item for item in os.environ["S3_BUCKETS"].split(",") if item]
+    for bucket in buckets:
+        removed = 0
+        token = ""
+        while True:
+            params = {"list-type": "2", "max-keys": "1000"}
+            if token:
+                params["continuation-token"] = token
+            query = "&".join(
+                f"{quote(key, safe='-_.~')}={quote(params[key], safe='-_.~')}"
+                for key in sorted(params)
+            )
+            status, body = call("GET", f"{endpoint}/{bucket}?{query}", {}, b"")
+            if status == 404:
+                print(f"EMPTY {bucket} absent", flush=True)
+                break
+            if status != 200:
+                raise SystemExit(f"list {bucket} HTTP {status}: {body[:200]!r}")
+            found, truncated, token = keys_of(body)
+            if not found:
+                print(f"EMPTY {bucket} {removed}", flush=True)
+                break
+            for key in found:
+                encoded = quote(key, safe="/")
+                status, body = call("DELETE", f"{endpoint}/{bucket}/{encoded}", {}, b"")
+                if status not in (200, 202, 204, 404):
+                    raise SystemExit(f"delete {bucket}/{key} HTTP {status}: {body[:200]!r}")
+                removed += 1
+            if not truncated:
+                print(f"EMPTY {bucket} {removed}", flush=True)
+                break
+            if not token:
+                raise SystemExit(f"list {bucket} truncated without a continuation token")
+
+if os.environ.get("S3_BUCKETS"):
+    main()
+"""
+
+
+def empty_video_buckets(site: dict) -> None:
+    """Delete every object in the chunks and segments buckets from the k8s host."""
+    buckets = (site.get("storage") or {}).get("buckets") or {}
+    names = [str(buckets.get(key) or "") for key in ("chunks", "segments")]
+    names = [name for name in names if name]
+    if not names:
+        return
+    keys = require_keys("empty chunks and segments")
+    k8s = site.get("k8s") or {}
+    if not (k8s.get("host") and k8s.get("user") and k8s.get("password")):
+        raise SystemExit("cannot empty buckets: set k8s.host, k8s.user, and k8s.password")
+    endpoint = str(site["storage"]["s3_endpoint"]).rstrip("/")
+    say(f"empty buckets {', '.join(names)} from {k8s['host']}", "1;33")
+    script = "\n".join([
+        "set -euo pipefail",
+        f"export AWS_ACCESS_KEY_ID={sh_quote(keys['access_key'])}",
+        f"export AWS_SECRET_ACCESS_KEY={sh_quote(keys['secret_key'])}",
+        f"export S3_ENDPOINT={sh_quote(endpoint)}",
+        f"export S3_BUCKETS={sh_quote(','.join(names))}",
+        "python3 - <<'PY'",
+        REMOTE_EMPTY_PY,
+        "PY",
+    ]) + "\n"
+    code, out = ssh_run(str(k8s["host"]), str(k8s["user"]), str(k8s["password"]), script, timeout=600)
+    text = redact(out).rstrip()
+    if text:
+        print(text, flush=True)
+    if code != 0:
+        raise SystemExit(f"empty buckets failed (ssh exit {code})")
+
+
+def delete_named(kind: str, names: list[str], *, force: bool = False, timeout: int = 180) -> None:
+    """Delete each name that still exists. One list call for the whole kind."""
+    have = cli_names(kind)
+    label = kind[:-1] if kind.endswith("s") else kind
+    for name in names:
+        if name not in have:
+            say(f"{label} {name} absent", "32")
+            continue
+        say(f"delete {label} {name}", "1;33")
+        cmd = ["vastde", kind, "delete", name]
+        if force:
+            cmd.append("--force")
+        run_delete(cmd, timeout=timeout)
+
+
+def delete_kubernetes(site: dict) -> None:
     ns = site["site"]["namespace"]
     env = kube_env(site)
     objects = list(K8S_OBJECTS)
@@ -1150,77 +1335,116 @@ def cleanup_site(site: dict) -> None:
         kubectl(env, "delete", "deployment", fn["name"], "-n", ns, "--ignore-not-found", timeout=60)
     kubectl(env, "label", "ns", ns, "zarf.dev/agent-", timeout=30)
 
-    de = site["dataengine"]
-    pipeline = de["pipeline"]
-    if pipeline in cli_names("pipelines"):
-        say(f"delete pipeline {pipeline}", "1;33")
-        run_delete(["vastde", "pipelines", "delete", pipeline], timeout=300)
-    else:
-        say(f"pipeline {pipeline} absent", "32")
 
-    function_names = cli_names("functions")
-    for fn in site.get("pipeline", {}).get("functions") or []:
-        name = fn["name"]
-        if name not in function_names:
-            say(f"function {name} absent", "32")
-            continue
-        say(f"delete function {name}", "1;33")
-        run_delete(["vastde", "functions", "delete", name, "--force"])
-
-    trigger_names = cli_names("triggers")
-    for trig in site.get("pipeline", {}).get("triggers") or []:
-        name = trig["name"]
-        if name not in trigger_names:
-            say(f"trigger {name} absent", "32")
-            continue
-        say(f"delete trigger {name}", "1;33")
-        run_delete(["vastde", "triggers", "delete", name, "--force"])
-
-    vms = Vms(site["vms"]["host"], site["vms"]["tenant"], site["vms"]["user"], site["vms"]["password"])
-    code, data = vms.call("GET", f"/tenants/?name={site['vms']['tenant']}")
-    tenant_rows = rows_of(data)
-    tenant_id = tenant_rows[0].get("id") if code == 200 and tenant_rows else None
-    broker = de["broker"]
-    topic = de["topic"]
-    code, out = run(["vastde", "topics", "list", "--database-name", broker, "-o", "json"], timeout=60)
-    topic_names = []
-    if code == 0:
-        try:
-            topic_names = [row.get("name") for row in rows_of(json_from_cli(out))]
-        except Exception:
-            topic_names = []
-    if topic in topic_names:
-        say(f"delete topic {topic}", "1;33")
-        code, data = vms.call("DELETE", f"/topics/?database_name={broker}&name={topic}")
-        if code not in (200, 202, 204):
-            raise SystemExit(f"delete topic failed HTTP {code}: {redact(str(data)[:300])}")
-    else:
+def delete_topic(vms: Vms, broker: str, topic: str) -> None:
+    if topic not in topic_names(broker):
         say(f"topic {topic} absent", "32")
+        return
+    say(f"delete topic {topic}", "1;33")
+    code, data = vms.call("DELETE", f"/topics/?database_name={broker}&name={topic}")
+    vms_expect(code, data, "delete topic")
 
-    if tenant_id:
-        code, listed = vms.call("GET", f"/views/?tenant_id={tenant_id}")
-        by_bucket = {row.get("bucket"): row for row in rows_of(listed)}
-        for bucket in (site.get("storage", {}).get("buckets") or {}).values():
-            row = by_bucket.get(bucket)
-            if not row:
-                say(f"bucket {bucket} absent", "32")
-                continue
-            say(f"delete bucket {bucket}", "1;33")
-            code, data = vms.call("DELETE", f"/views/{row['id']}/")
-            if code not in (200, 202, 204):
-                raise SystemExit(f"delete bucket {bucket} failed HTTP {code}: {redact(str(data)[:300])}")
 
-    user_name = site["storage"]["user"]
+def schema_names(vms: Vms, bucket_name: str) -> list[str] | None:
+    """Schema names in one database bucket, from VMS. None when VMS cannot answer."""
+    code, data = vms.call("GET", f"/schemas/?database_name={bucket_name}", timeout=30)
+    if code != 200:
+        return None
+    names = []
+    for row in rows_of(data):
+        if row.get("database_name") not in (None, bucket_name):
+            continue
+        name = row.get("name")
+        if name:
+            names.append(name)
+    return names
+
+
+def table_names(vms: Vms, bucket_name: str, schema_name: str) -> list[str]:
+    code, data = vms.call(
+        "GET",
+        f"/tables/?database_name={bucket_name}&schema_name={schema_name}",
+        timeout=30,
+    )
+    if code == 404:
+        return []
+    vms_expect(code, data, f"list tables in {schema_name}", ok=(200,))
+    return [row["name"] for row in rows_of(data) if row.get("name")]
+
+
+def drop_database(vms: Vms, site: dict) -> None:
+    """Drop every VastDB table and schema in the database bucket so the view can be deleted.
+
+    Ingest creates them when chunks are written. The query-engine address is not
+    reachable from the deploy host, so this uses the same VMS API that listed them.
+    """
+    storage = site.get("storage") or {}
+    buckets = storage.get("buckets") or {}
+    bucket_name = buckets.get("database")
+    schema_name = storage.get("schema")
+    if not (bucket_name and schema_name):
+        return
+    known = schema_names(vms, bucket_name)
+    if known is None:
+        raise SystemExit(f"cannot list schemas in {bucket_name}")
+    if not known:
+        say(f"schema {schema_name} absent", "32")
+        return
+    # Children first, so a nested schema is empty before its parent is removed.
+    for name in sorted(known, key=lambda item: item.count("/"), reverse=True):
+        for table in table_names(vms, bucket_name, name):
+            say(f"delete table {name}/{table}", "1;33")
+            code, data = vms.call("DELETE", "/tables/delete/", {
+                "database_name": bucket_name,
+                "schema_name": name,
+                "name": table,
+            })
+            vms_expect(code, data, f"delete table {name}/{table}")
+        say(f"delete schema {name}", "1;33")
+        code, data = vms.call("DELETE", "/schemas/delete/", {
+            "database_name": bucket_name,
+            "name": name,
+        })
+        vms_expect(code, data, f"delete schema {name}")
+
+
+def tenant_views(vms: Vms, site: dict) -> dict | None:
+    code, data = vms.call("GET", f"/tenants/?name={site['vms']['tenant']}")
+    rows = rows_of(data)
+    if code != 200 or not rows:
+        say(f"tenant {site['vms']['tenant']} absent", "32")
+        return None
+    return views_by_bucket(vms, rows[0].get("id"))
+
+
+def delete_buckets(vms: Vms, site: dict, views: dict) -> None:
+    """Drop VastDB schemas while the database view still exists, then delete every view."""
+    buckets = (site.get("storage") or {}).get("buckets") or {}
+    database = buckets.get("database")
+    if database and database in views:
+        drop_database(vms, site)
+    for bucket in buckets.values():
+        row = views.get(bucket)
+        if not row:
+            say(f"bucket {bucket} absent", "32")
+            continue
+        say(f"delete bucket {bucket}", "1;33")
+        code, data = vms.call("DELETE", f"/views/{row['id']}/")
+        vms_expect(code, data, f"delete bucket {bucket}")
+
+
+def delete_storage_user(vms: Vms, user_name: str) -> None:
     code, data = vms.call("GET", f"/users/?name={user_name}")
     users = [row for row in rows_of(data) if row.get("name") == user_name]
-    if users:
-        say(f"delete user {user_name}", "1;33")
-        code, data = vms.call("DELETE", f"/users/{users[0]['id']}/")
-        if code not in (200, 202, 204):
-            raise SystemExit(f"delete user failed HTTP {code}: {redact(str(data)[:300])}")
-    else:
+    if not users:
         say(f"user {user_name} absent", "32")
+        return
+    say(f"delete user {user_name}", "1;33")
+    code, data = vms.call("DELETE", f"/users/{users[0]['id']}/")
+    vms_expect(code, data, "delete user")
 
+
+def remove_work_files() -> None:
     for name in ("storage-keys.yaml", "vss-secret.yaml", "pipeline.yaml"):
         path = WORK / name
         if path.exists():
@@ -1230,6 +1454,35 @@ def cleanup_site(site: dict) -> None:
     if k8s.exists():
         shutil.rmtree(k8s)
         say("removed deploy-work/k8s", "32")
+
+
+def cleanup_site(site: dict) -> None:
+    """Remove the objects this site file owns. The namespace stays; it is attached to DataEngine.
+
+    Order matters: stop writers, empty the video buckets, drop VastDB tables and schemas,
+    then delete the views. A database view that still has a schema cannot be deleted.
+    """
+    delete_kubernetes(site)
+    vms = Vms(site["vms"]["host"], site["vms"]["tenant"], site["vms"]["user"], site["vms"]["password"])
+    views = tenant_views(vms, site)
+    buckets = (site.get("storage") or {}).get("buckets") or {}
+    video_left = views is not None and any(
+        buckets.get(key) and buckets[key] in views for key in ("chunks", "segments")
+    )
+    if video_left:
+        empty_video_buckets(site)
+    elif views is not None:
+        say("buckets chunks and segments absent", "32")
+    de = site["dataengine"]
+    pipeline = site.get("pipeline") or {}
+    delete_named("pipelines", [de["pipeline"]], timeout=300)
+    delete_named("functions", [fn["name"] for fn in pipeline.get("functions") or []], force=True)
+    delete_named("triggers", [trig["name"] for trig in pipeline.get("triggers") or []], force=True)
+    delete_topic(vms, de["broker"], de["topic"])
+    if views is not None:
+        delete_buckets(vms, site, views)
+    delete_storage_user(vms, site["storage"]["user"])
+    remove_work_files()
     say("\ncleanup finished", "1;32")
 
 

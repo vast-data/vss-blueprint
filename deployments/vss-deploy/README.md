@@ -18,9 +18,9 @@ These must already be true before `./deploy.sh`. `--check` probes them and does 
 
 ### On the machine that runs the script
 
-- `python3`
+- Python 3.10 or newer. `./deploy.sh` creates `deploy-work/venv` and installs PyYAML there.
 - `kubectl`, with `KUBECONFIG` set or `site.kubeconfig` filled. The shell value wins.
-- `vastde` on `PATH`, already logged in as `vms.user` against `vms.host` for tenant `vms.tenant`. The tenant, username, and VMS host in `vastde config view` must match `site.yaml`.
+- `vastde` v5.5.0-sp2 on `PATH`, already logged in as `vms.user` against `vms.host` for tenant `vms.tenant`. The tenant, username, and VMS host in `vastde config view` must match `site.yaml`. This deploy path is aligned with DataEngine 5.5.0-sp2. Install and builder selection: [Get vastde and roll function images](#get-vastde-and-roll-function-images).
 
 ### Kubernetes and DataEngine
 
@@ -34,7 +34,7 @@ Build and push before the deploy:
 ```bash
 # from the repo root
 REGISTRY=your.registry/vss TAG=v1 source-code/scripts/build-retrieval-images.sh
-REGISTRY=your.registry/vss TAG=v1 source-code/scripts/build-vastde-functions.sh
+REGISTRY=<registry-host>/<path> TAG=<image-tag> source-code/scripts/build-vastde-functions.sh
 ```
 
 Image names in `site.yaml` must be the names you pushed. See [scripts](../../source-code/scripts/README.md).
@@ -70,6 +70,100 @@ A missing response fails the check. A non-200 on a model URL is a warning.
 
 Leave `https.cert` and `https.key` empty for HTTP. Set both to serve TLS. The secret name defaults to `vss-tls`. One of the two paths is a failure.
 
+## Get vastde and roll function images
+
+Aligned with DataEngine **5.5.0-sp2**: CLI `vastde` v5.5.0-sp2 and builder `vastdataorg/vast-builder:v5.5.0-sp2`. Run this on the Linux host that has Docker and the function source (`linux/amd64`). Pulling `vastdataorg/vast-builder` leaves the CLI on whatever builder it already had; `vastde builders set` is what selects it. `<image-tag>` below is the tag you push for the function images. It is separate from the 5.5.0-sp2 CLI and builder versions.
+
+### 1. Put the CLI on `PATH`
+
+```bash
+mkdir -p "$HOME/bin"
+curl -fsSL -o "$HOME/bin/vastde" \
+  https://github.com/vast-data/dataengine-cli/releases/download/v5.5.0-sp2/vastde_linux_amd64
+chmod +x "$HOME/bin/vastde"
+case ":$PATH:" in
+  *":$HOME/bin:"*) ;;
+  *) echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc" ;;
+esac
+export PATH="$HOME/bin:$PATH"
+hash -r
+vastde version
+```
+
+`vastde version` prints `v5.5.0-sp2`. The darwin binary is a different build; function images are built on this Linux host.
+
+### 2. Log in and select the builder
+
+Tenant, user, and VMS host come from `site.yaml` (`vms.tenant`, `vms.user`, `vms.host`). Type the password when asked. Leave it out of the repo.
+
+```bash
+vastde config init \
+  --tenant <vms.tenant> \
+  --username <vms.user> \
+  --vms-url https://<vms.host> \
+  --builder-image-url vastdataorg/vast-builder:v5.5.0-sp2
+vastde config set --password
+vastde builders set v5.5.0-sp2
+vastde builders inspect
+vastde config view
+```
+
+`builders inspect` shows `vastdataorg/vast-builder:v5.5.0-sp2`. If `~/.vast/config.toml` already exists, `config init` stops until you pass `--force`, or you set the same fields with `vastde config set`. `vastde config view` must show the same tenant, user, and VMS host as `site.yaml`.
+
+### 3. Build and push a new tag
+
+From the `source-code` directory. `vastde functions build <name>` writes a local image `<name>:latest`. Push that to the artifact in `site.yaml` (`dev/solutions/vss2-*`). In zsh, write `"${name}:latest"`. `"$name:latest"` is parsed as a modifier and the tag disappears.
+
+Use a new tag for every rebuild. Pushing a tag the pipeline already runs does not change the pods.
+
+```bash
+cd <checkout>/source-code
+TAG=<image-tag>
+REG=<registry-host>/<path>
+
+build() {
+  local dir="$1" name="$2"
+  echo "==> ${name}"
+  (cd "${dir}" && vastde functions build "${name}") || return 1
+  docker tag "${name}:latest" "${REG}/${name}:${TAG}" || return 1
+  docker push "${REG}/${name}:${TAG}"
+}
+
+build ingest/video-segmenter vss2-segmenter
+build ingest/video-detector vss2-detector
+build ingest/video-reasoner vss2-reasoner
+build ingest/video-embedder vss2-embedder
+build ingest/vastdb-writer vss2-vastdb
+build enrichment/prompt-suggester vss2-events
+```
+
+Log in to that registry before `docker push`. A lifecycle exit 51 is the constraints buildpack rejecting `requirements.txt`. Rerun one function with `vastde functions build <name> -v 5` (this failure does not write `build.log`). Pins that resolve on this builder: `cloudevents==1.11.0`, `pydantic==2.10.6`, `pydantic-settings==2.7.1`. Leave `opentelemetry-*` out of `requirements.txt`. The segmenter also needs `setuptools==75.8.2` next to `imageio-ffmpeg==0.4.9`.
+
+Confirm the image you are about to roll:
+
+```bash
+docker run --rm --entrypoint python "${REG}/vss2-detector:${TAG}" \
+  -c "import pydantic; print(pydantic.VERSION)"
+```
+
+That prints `2.10.6`.
+
+`source-code/scripts/build-vastde-functions.sh` runs the same six builds. It reads `REGISTRY` and `TAG` instead of `REG`.
+
+In `site.yaml`, write the tag with a space after the colon (`tag: <image-tag>`). `tag:<image-tag>` with no space is a different key, and the deploy then looks for `:latest`.
+
+### 4. Publish the new revision
+
+`./deploy.sh` skips a function that already exists and redeploys the pipeline on the revision it already has. A new `tag` in `site.yaml` does not roll those pods. Publish a revision, then set the pipeline to that revision and deploy it.
+
+```bash
+for name in vss-segmenter vss-detector vss-reasoner vss-embedder vss-vastdb vss-suggester; do
+  vastde functions update "$name" --image-tag "$TAG" --publish
+done
+```
+
+In the pipeline builder, set every function to the revision just published and deploy `vss-pipeline`.
+
 ## Flags
 
 | Command | What it does |
@@ -80,6 +174,8 @@ Leave `https.cert` and `https.key` empty for HTTP. Set both to serve TLS. The se
 | `./deploy.sh site.yaml --no-cleanup` | Deploy, and leave objects in place if a step fails. |
 
 `--check` and `--cleanup` are not combined. A validator failure does not deploy and does not clean up.
+
+Cleanup empties the chunks and segments buckets from `k8s.host`, which can reach the S3 VIP, using `deploy-work/storage-keys.yaml`. It then deletes every VastDB table and schema in the database bucket through VMS, and only then deletes that view. Keep the keys file until cleanup finishes.
 
 ## What the script creates
 
