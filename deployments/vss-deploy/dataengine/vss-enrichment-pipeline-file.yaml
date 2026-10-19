@@ -1,4 +1,4 @@
-# DataEngine pipeline: scheduled LLM prompt + key-event suggestions → vss-prompts-events
+# DataEngine pipeline: scheduled LLM prompt + key-event suggestions → vss-events-collection
 # Register function VRN after building/pushing prompt-suggester image to DataEngine.
 # Same secret as ingest: vss2-secret (see vss-gui / vss-cli secret templates in this directory).
 kubernetes_cluster_vrn: <your-kubernetes-cluster-vrn>

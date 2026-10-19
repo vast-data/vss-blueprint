@@ -4,7 +4,7 @@ Runnable from any working directory (scripts resolve `source-code/` automaticall
 
 | Script | Purpose |
 |--------|---------|
-| [`build-vastde-functions.sh`](build-vastde-functions.sh) | Build + push DataEngine pipeline images (segmenter, reasoner, embedder, vastdb-writer, prompt-suggester) |
+| [`build-vastde-functions.sh`](build-vastde-functions.sh) | Build + push DataEngine images `vss2-segmenter`, `vss2-detector`, `vss2-reasoner`, `vss2-embedder`, `vss2-vastdb`, `vss2-events`. Aligned with DataEngine 5.5.0-sp2 (`vastde` v5.5.0-sp2, builder `vastdataorg/vast-builder:v5.5.0-sp2`): [Get vastde and roll function images](../../deployments/vss-deploy/README.md#get-vastde-and-roll-function-images). |
 | [`build-retrieval-images.sh`](build-retrieval-images.sh) | Build + push K8s app images (backend, frontend, streaming, batch-sync) |
 | [`link-ingest-metadata.sh`](link-ingest-metadata.sh) | Local dev: symlink `shared/ingest_metadata.py` and `shared/video_chunker.py` into backend / streaming / batch-sync `src/` |
 

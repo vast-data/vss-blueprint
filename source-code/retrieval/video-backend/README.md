@@ -117,7 +117,7 @@ Deletes one Explore card (one parent upload), not the rest of its `stream_id`.
 
 Removes, in order:
 
-1. Key-event rows in `vss-prompts-events` for that `original_video`
+1. Key-event rows in `vss-events-collection` for that `original_video`
 2. Collection rows for that `original_video` (reasoning, embeddings, tags, metadata)
 3. The source object, its segment objects, and detection sidecars (`detections/…`)
 
@@ -154,7 +154,7 @@ Explore list building uses a **single cached VastDB scan** per TTL window and bu
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/v1/suggestions` | Grounded search chips + key events from `vss-prompts-events` (prompt-suggester rephrases `reasoning_content`) |
+| `GET /api/v1/suggestions` | Grounded search chips + key events from `vss-events-collection` (prompt-suggester rephrases `reasoning_content`) |
 | `GET /api/v1/dashboard/stats` | VastDB overview, ingest quality, object instance heatmap (`object_counts`), S3 inventory, recent videos (`scope`) |
 
 Suggestions filters key events to videos the user can access. Returns `prompts_table_available` / `table_message` when the prompts table is missing. Timeline segments include `object_counts` for player chips (`person 3`).

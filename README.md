@@ -63,7 +63,7 @@ Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide
 | **Stream chunks** | Same `stream_id` on upload, streaming, or batch sync; Explore plays chunk N/total with Previous/Next | [video-backend](source-code/retrieval/video-backend/README.md#upload-streams-and-delete) |
 | **Delete a video** | Explore delete, or `DELETE /api/v1/videos`, removes that upload’s S3 objects, VastDB rows, and sidecars | [video-backend](source-code/retrieval/video-backend/README.md#upload-streams-and-delete) |
 | **Data Dashboard** | VastDB stats, ingest health, S3 pipeline inventory, live key events | [video-frontend](source-code/retrieval/video-frontend/README.md#application-modes) |
-| **Search suggestions & key events** | Grounded ≤8-word rephrases of segment `reasoning_content` → `vss-prompts-events` | [prompt-suggester](source-code/enrichment/prompt-suggester/README.md) |
+| **Search suggestions & key events** | Grounded ≤8-word rephrases of segment `reasoning_content` → `vss-events-collection` | [prompt-suggester](source-code/enrichment/prompt-suggester/README.md) |
 | **Object detection counts** | YOLO peak concurrent per class (`object_counts`); UI chips + dashboard heatmap | [video-detector](source-code/ingest/video-detector/README.md) |
 | **Agent APIs** | Tool wrappers + grounded Q&A for external agents | [video-backend](source-code/retrieval/video-backend/README.md#agent-apis) |
 | **Time Filtering** | Filter by upload time (presets or custom range) | [video-backend](source-code/retrieval/video-backend/README.md#gui-settings) |
@@ -111,7 +111,7 @@ Upload Video → vss-chunks bucket
                     ↓
          prompt-suggester (optional enrichment)
                     ↓
-         vss-prompts-events (grounded search chips + key events)
+         vss-events-collection (grounded search chips + key events)
 ```
 
 **Search flow:** query embed (Cosmos-Embed1) → hybrid search (`reasoning_content` + visual) → clip cards with upload-time badge and match timeline → Cosmos-Reason2 synthesis → player with bbox overlay and `label N` object chips

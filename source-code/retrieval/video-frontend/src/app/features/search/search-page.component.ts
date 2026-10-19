@@ -79,7 +79,7 @@ import {
               <p class="examples-hint">
                 No suggestions yet. Run the <strong>prompt-suggester</strong> DataEngine function
                 after segments are in <code>vss-collection</code> (writes to
-                <code>vss-prompts-events</code>).
+                <code>vss-events-collection</code>).
               </p>
             } @else {
               <ul class="example-list">

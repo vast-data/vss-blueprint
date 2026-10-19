@@ -40,11 +40,11 @@ storage:
   buckets:
     chunks: vss-chunks
     segments: vss-chunks-segments
-    database: vss-vastdb-bucket
+    database: vss-vastdb-bucket       # VastDB Bucket
   output_bucket_suffix: "-segments"   # segmenter writes {chunks}{suffix}; that name must be buckets.segments
-  schema: vss-schema
-  collection: vss-collection
-  prompts_collection: vss-events-collection
+  schema: vss-schema                  # VastDB Schema
+  collection: vss-collection          # VastDB VSS Table
+  prompts_collection: vss-events-collection  # VastDB Events Table
 
 images:
   functions:                         # empty tag means latest

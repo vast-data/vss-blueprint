@@ -36,7 +36,7 @@ vss-chunks-segments bucket → video-detector → video-reasoner → video-embed
 **Enrichment — `vss-enrichment-pipeline` (optional, after ingest is producing rows)**
 
 ```
-Schedule trigger → prompt-suggester → vss-prompts-events (search chips + key events)
+Schedule trigger → prompt-suggester → vss-events-collection (search chips + key events)
 ```
 
 ## Files in This Directory
@@ -71,7 +71,7 @@ Secret **name** in DataEngine must be `vss2-secret`. Bucket/table **values** use
 | **Embedding** | Text + visual NIM (`embeddinghost` / `embeddingport: 8002`, `embeddingmodel: nvidia/cosmos-embed1`); recreate VastDB collection after schema changes |
 | **VastDB** | `vdbendpoint`, `vdbaccesskey`, `vdbsecretkey`, `vdbbucket`, `vdbschema`, `vdbcollection` |
 | **YOLO** | `yolo_infer_host`, `yolo_infer_port` (`8003` with [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md); templates may still show `8022`), `detection_sidecar_prefix` |
-| **Enrichment** | `vdbpromptscollection` (`vss-prompts-events`), `suggestions_*` (used by prompt-suggester) |
+| **Enrichment** | `vdbpromptscollection` (`vss-events-collection`), `suggestions_*` (used by prompt-suggester) |
 | **Processing** | `segment_duration`, `scenario` (default prompt key; see [video-reasoner README](../../../source-code/ingest/video-reasoner/README.md). GUI scenario labels: [shared/ingest_metadata.py](../../../source-code/shared/ingest_metadata.py)) |
 
 ## Step 2: Create Triggers
@@ -89,11 +89,11 @@ Navigate to **DataEngine UI → Functions** and create:
 
 | Function | Image (names from `build-vastde-functions.sh`) |
 |----------|-------|
-| `video-segmenter` | `your.registry/vss-video-segmenter:v1` |
-| `video-detector` | `your.registry/vss-video-detector:v1` |
-| `video-reasoner` | `your.registry/vss-video-reasoner:v1` |
-| `video-embedder` | `your.registry/vss-video-embedder:v1` |
-| `video-vastdb-writer` | `your.registry/vss-video-vastdb:v1` |
+| `video-segmenter` | `<registry-host>/<path>/vss2-segmenter:<image-tag>` |
+| `video-detector` | `<registry-host>/<path>/vss2-detector:<image-tag>` |
+| `video-reasoner` | `<registry-host>/<path>/vss2-reasoner:<image-tag>` |
+| `video-embedder` | `<registry-host>/<path>/vss2-embedder:<image-tag>` |
+| `video-vastdb-writer` | `<registry-host>/<path>/vss2-vastdb:<image-tag>` |
 
 ## Step 4: Create Pipeline
 
@@ -118,7 +118,7 @@ Navigate to **DataEngine UI → Pipelines → Create New Pipeline**
 Skip unless you want search suggestion chips and dashboard key events. Deploy after ingest is writing rows to `vss-collection`. Reuse **`vss2-secret`** — do not create a second secret. Details: [prompt-suggester](../../../source-code/enrichment/prompt-suggester/README.md).
 
 1. **Trigger:** DataEngine UI → Triggers → create `vss-prompt-suggester-scheduled-trigger` (type **Schedule**, e.g. every 5–15 minutes).
-2. **Function:** create `prompt-suggester` with image `your.registry/vss-video-events:v1` (name used by `build-vastde-functions.sh`).
+2. **Function:** create `prompt-suggester` with image `<registry-host>/<path>/vss2-events:<image-tag>`.
 3. **Pipeline:** name `vss-enrichment-pipeline`; attach existing `vss2-secret`; connect `vss-prompt-suggester-scheduled-trigger` → `prompt-suggester`.
 4. **Resources:** CPU `200m - 1000m`, memory `256Mi - 512Mi`. Activate.
 
@@ -143,7 +143,7 @@ vim vss-cli-secret-file-template.yaml
 | **Embedding** | Text + visual NIM (`embeddinghost` / `embeddingport: 8002`, `embeddingmodel: nvidia/cosmos-embed1`); recreate VastDB collection after schema changes |
 | **VastDB** | `vdbendpoint`, `vdbaccesskey`, `vdbsecretkey`, `vdbbucket`, `vdbschema`, `vdbcollection` |
 | **YOLO** | `yolo_infer_host`, `yolo_infer_port` (`8003` with [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md); templates may still show `8022`), `detection_sidecar_prefix` |
-| **Enrichment** | `vdbpromptscollection` (`vss-prompts-events`), `suggestions_*` (used by prompt-suggester) |
+| **Enrichment** | `vdbpromptscollection` (`vss-events-collection`), `suggestions_*` (used by prompt-suggester) |
 | **Processing** | `segment_duration`, `scenario` (default prompt key; see [video-reasoner README](../../../source-code/ingest/video-reasoner/README.md). GUI scenario labels: [shared/ingest_metadata.py](../../../source-code/shared/ingest_metadata.py)) |
 
 ## Step 2: Create Triggers
@@ -170,41 +170,41 @@ vastde triggers create \
 
 ## Step 3: Create Functions
 
-Set `--container-registry` to the registry name as configured in VMS. Replace `YOUR_ORG` in `--artifact-source` with the repository namespace/path that registry uses for the image you pushed (for Docker Hub this is typically `username` or org name, so the source looks like `YOUR_ORG/vss-video-segmenter`).
+Set `--container-registry` to the registry name as configured in VMS. Replace `YOUR_ORG` in `--artifact-source` with the repository namespace/path that registry uses for the image you pushed (for Docker Hub this is typically `username` or org name, so the source looks like `<path>/vss2-segmenter`).
 
 ```bash
 vastde functions create \
   --name video-segmenter \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vss-video-segmenter \
+  --artifact-source YOUR_ORG/vss2-segmenter \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-detector \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vss-video-detector \
+  --artifact-source YOUR_ORG/vss2-detector \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-reasoner \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vss-video-reasoner \
+  --artifact-source YOUR_ORG/vss2-reasoner \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-embedder \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vss-video-embedder \
+  --artifact-source YOUR_ORG/vss2-embedder \
   --artifact-type image \
   --image-tag v1
 
 vastde functions create \
   --name video-vastdb-writer \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vss-video-vastdb \
+  --artifact-source YOUR_ORG/vss2-vastdb \
   --artifact-type image \
   --image-tag v1
 ```
@@ -236,7 +236,7 @@ Create the schedule trigger in DataEngine (name must match the YAML VRN: `vss-pr
 vastde functions create \
   --name prompt-suggester \
   --container-registry dockerio \
-  --artifact-source YOUR_ORG/vss-video-events \
+  --artifact-source YOUR_ORG/vss2-events \
   --artifact-type image \
   --image-tag v1
 ```
@@ -266,56 +266,27 @@ vastde pipelines create \
 
 ## Build DataEngine function images
 
-Build all pipeline function images with the helper script (recommended):
+Aligned with DataEngine **5.5.0-sp2** (`vastde` v5.5.0-sp2, builder `vastdataorg/vast-builder:v5.5.0-sp2`). Install the CLI and select that builder from [Get vastde and roll function images](../README.md#get-vastde-and-roll-function-images). From `source-code`, `TAG` and `REG` are the function image tag and the registry path. They are separate from the 5.5.0-sp2 CLI and builder versions. Paths below are relative to that directory. `"${name}:latest"` keeps the tag in zsh.
 
 ```bash
-REGISTRY=your.registry/vss TAG=v1 source-code/scripts/build-vastde-functions.sh
+cd <checkout>/source-code
+TAG=<image-tag>
+REG=<registry-host>/<path>
+
+build() {
+  local dir="$1" name="$2"
+  echo "==> ${name}"
+  (cd "${dir}" && vastde functions build "${name}") || return 1
+  docker tag "${name}:latest" "${REG}/${name}:${TAG}" || return 1
+  docker push "${REG}/${name}:${TAG}"
+}
+
+build ingest/video-segmenter vss2-segmenter
+build ingest/video-detector vss2-detector
+build ingest/video-reasoner vss2-reasoner
+build ingest/video-embedder vss2-embedder
+build ingest/vastdb-writer vss2-vastdb
+build enrichment/prompt-suggester vss2-events
 ```
 
-This runs `vastde functions build` for segmenter, detector, reasoner, embedder, vastdb-writer (`vss-video-vastdb`), and prompt-suggester (`vss-video-events`), then tags and pushes to your registry. DataEngine workloads typically target `linux/amd64`.
-
-Manual builds with the [VAST DataEngine CLI](https://github.com/vast-data/dataengine-cli) (`vastde`):
-
-From `vss-blueprint/`:
-
-```bash
-# video-segmenter
-cd source-code/ingest/video-segmenter
-vastde functions build vss-video-segmenter
-docker tag vss-video-segmenter your.registry/vss-video-segmenter:v1
-docker push your.registry/vss-video-segmenter:v1
-
-# video-detector
-cd ../video-detector
-vastde functions build vss-video-detector
-docker tag vss-video-detector your.registry/vss-video-detector:v1
-docker push your.registry/vss-video-detector:v1
-
-# video-reasoner
-cd ../video-reasoner
-vastde functions build vss-video-reasoner
-docker tag vss-video-reasoner your.registry/vss-video-reasoner:v1
-docker push your.registry/vss-video-reasoner:v1
-
-# video-embedder
-cd ../video-embedder
-vastde functions build vss-video-embedder
-docker tag vss-video-embedder your.registry/vss-video-embedder:v1
-docker push your.registry/vss-video-embedder:v1
-
-# vastdb-writer (pushed image name vss-video-vastdb)
-cd ../vastdb-writer
-vastde functions build vss-video-vastdb
-docker tag vss-video-vastdb your.registry/vss-video-vastdb:v1
-docker push your.registry/vss-video-vastdb:v1
-
-# prompt-suggester (pushed image name vss-video-events)
-cd ../../enrichment/prompt-suggester
-vastde functions build vss-video-events
-docker tag vss-video-events your.registry/vss-video-events:v1
-docker push your.registry/vss-video-events:v1
-```
-
-Replace `your.registry` with your real registry. Use the same names and tags in the DataEngine UI, in `vastde functions create` (see Step 3), and in your VMS registry configuration.
-
-See [scripts README](../../../source-code/scripts/README.md) for `REGISTRY` / `TAG` overrides.
+The same six builds are `REGISTRY=<registry-host>/<path> TAG=<image-tag> source-code/scripts/build-vastde-functions.sh`. That script reads `REGISTRY`, not `REG`. Use these image names in the DataEngine UI and in `vastde functions create`.
