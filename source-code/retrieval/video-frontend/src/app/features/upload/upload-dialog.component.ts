@@ -47,7 +47,12 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
                   Add more (up to {{ maxFiles }} total)
                 }
               </p>
-              <p class="drop-hint">Up to {{ maxFiles }} files · {{ maxSizeMb }} MB per file</p>
+              <p class="drop-hint">
+                Up to {{ maxFiles }} files · {{ maxSizeMb }} MB per file
+                <mat-icon class="hint-info"
+                          (click)="$event.stopPropagation()"
+                          matTooltip="Default: each file is split into 30-second chunks">info_outline</mat-icon>
+              </p>
               @if (selectedFiles().length > 0) {
                 <ul class="selected-files-list" (click)="$event.stopPropagation()">
                   @for (file of selectedFiles(); track file.name + '-' + file.size + '-' + $index) {
@@ -220,8 +225,24 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
       background: transparent !important;
     }
 
+    :host {
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     .upload-dialog-container {
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+
       ::ng-deep h2 {
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
         gap: 0.75rem;
@@ -238,7 +259,10 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     ::ng-deep mat-dialog-content {
-      min-height: 300px;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: calc(85vh - 9.5rem);
+      overflow-y: auto;
       padding: 0 1.5rem 1.5rem 1.5rem !important;
     }
     
@@ -285,9 +309,21 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     .drop-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
       color: var(--text-muted);
       font-size: 0.8rem;
       margin: 0 0 0.75rem 0;
+
+      .hint-info {
+        font-size: 0.95rem;
+        width: 0.95rem;
+        height: 0.95rem;
+        opacity: 0.7;
+        cursor: help;
+      }
     }
 
     .selected-files-list {
@@ -653,6 +689,7 @@ import { parseCommaList, pickIngestMetadataPayload } from '../../shared/utils/in
     }
 
     ::ng-deep mat-dialog-actions {
+      flex: 0 0 auto;
       padding: 1rem 1.5rem !important;
       justify-content: flex-end;
       gap: 1rem;

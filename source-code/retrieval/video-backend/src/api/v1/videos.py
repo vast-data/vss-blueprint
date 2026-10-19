@@ -5,6 +5,9 @@ import asyncio
 import gzip
 import json
 import logging
+import os
+import shutil
+import tempfile
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Form, Request, Response
 from fastapi.responses import StreamingResponse
@@ -50,6 +53,50 @@ async def _get_upload_semaphore() -> asyncio.Semaphore:
     return _upload_semaphore
 
 
+def _upload_split_file(
+    s3_service,
+    file,
+    user,
+    is_public: bool,
+    tags: list,
+    allowed_users: list,
+    scenario: str,
+    custom_prompt,
+    camera_id,
+    capture_type,
+    location,
+):
+    """Spool the upload and split it. Runs in a worker thread."""
+    from src.utils.upload_chunks import split_and_upload
+
+    suffix = os.path.splitext(file.filename or "")[1] or ".mp4"
+    fd, local_path = tempfile.mkstemp(suffix=suffix[:16], prefix="vss-upload-")
+    os.close(fd)
+    try:
+        file.file.seek(0)
+        with open(local_path, "wb") as out:
+            shutil.copyfileobj(file.file, out)
+        return split_and_upload(
+            s3_service,
+            local_path,
+            file.filename or "video.mp4",
+            user=user,
+            is_public=is_public,
+            tags=tags,
+            allowed_users=allowed_users,
+            scenario=scenario,
+            custom_prompt=custom_prompt,
+            camera_id=camera_id,
+            capture_type=capture_type,
+            location=location,
+        )
+    finally:
+        try:
+            os.remove(local_path)
+        except OSError:
+            pass
+
+
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...),
@@ -79,12 +126,14 @@ async def upload_video(
         camera_id: Camera identifier (optional metadata)
         capture_type: Capture type - traffic, streets, crowds, malls, etc. (optional metadata)
         location: Geographic area/location (optional metadata)
-        stream_id: Shared id for chunks of one video (optional)
+        stream_id: Shared id for chunks of one video (optional). When set with
+            chunk_number, the file is stored as that chunk and is not split again.
         chunk_number: 1-based position in that stream (required with stream_id)
         current_user: Current authenticated user
-        
+
     Returns:
-        Upload confirmation with object key
+        Upload confirmation. A file without stream fields is split at the default
+        chunk size (30 seconds). A file that already fits is stored as chunk 0.
     """
     logger.info(f"Upload request from {current_user.username}: filename='{file.filename}', is_public={is_public}")
 
@@ -125,31 +174,63 @@ async def upload_video(
         location_value = location.strip() if location else None
         custom_prompt_value = truncate_custom_prompt(custom_prompt)
 
-        object_key = await s3_service.upload_file(
-            file=file,
-            user=current_user,
-            is_public=is_public,
-            tags=tags_list,
-            allowed_users=allowed_users_list,
-            scenario=scenario_value,
-            custom_prompt=custom_prompt_value,
-            camera_id=camera_id_value,
-            capture_type=capture_type_value,
-            location=location_value,
-            extra_metadata=stream_meta or None,
-        )
+        if stream_meta:
+            object_key = await s3_service.upload_file(
+                file=file,
+                user=current_user,
+                is_public=is_public,
+                tags=tags_list,
+                allowed_users=allowed_users_list,
+                scenario=scenario_value,
+                custom_prompt=custom_prompt_value,
+                camera_id=camera_id_value,
+                capture_type=capture_type_value,
+                location=location_value,
+                extra_metadata=stream_meta,
+            )
+            logger.info(f"Video uploaded: {object_key}")
+            return {
+                "success": True,
+                "object_key": object_key,
+                "stream_id": stream_meta.get("stream_id") or None,
+                "chunk_number": chunk_number,
+                "chunk_count": 1,
+                "message": "Video uploaded successfully and will be processed shortly"
+            }
 
-        logger.info(f"Video uploaded: {object_key}")
+        stream_id_value, object_keys = await asyncio.to_thread(
+            _upload_split_file,
+            s3_service,
+            file,
+            current_user,
+            is_public,
+            tags_list,
+            allowed_users_list,
+            scenario_value,
+            custom_prompt_value,
+            camera_id_value,
+            capture_type_value,
+            location_value,
+        )
+        logger.info("Video uploaded as %s chunk(s): %s", len(object_keys), object_keys[0])
         return {
             "success": True,
-            "object_key": object_key,
-            "stream_id": stream_meta.get("stream_id") or None,
-            "chunk_number": chunk_number if stream_meta else None,
-            "message": "Video uploaded successfully and will be processed shortly"
+            "object_key": object_keys[0],
+            "object_keys": object_keys,
+            "stream_id": stream_id_value,
+            "chunk_number": 1,
+            "chunk_count": len(object_keys),
+            "message": f"Video uploaded as {len(object_keys)} chunk(s) and will be processed shortly",
         }
 
     except HTTPException:
         raise
+    except RuntimeError as exc:
+        logger.error("Failed to split upload: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not split the video into chunks",
+        )
     except Exception as e:
         logger.error(f"Failed to upload video: {str(e)}")
         raise HTTPException(

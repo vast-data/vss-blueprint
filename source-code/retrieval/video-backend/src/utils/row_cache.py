@@ -64,6 +64,10 @@ class _TTLCache:
                     self._inflight.pop(key, None)
                 event.set()
 
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
 
 _row_cache = _TTLCache()
 _s3_cache = _TTLCache()
@@ -101,3 +105,12 @@ def cached_suggestions(
 ) -> Dict[str, Any]:
     payload = _suggestions_cache.get_or_set(cache_key, ttl_sec, loader)
     return copy.deepcopy(payload)
+
+
+def clear_read_caches() -> None:
+    """Drop cached reads so a delete or upload shows up on the next request."""
+    _row_cache.clear()
+    _s3_cache.clear()
+    _distinct_cache.clear()
+    _prompts_cache.clear()
+    _suggestions_cache.clear()

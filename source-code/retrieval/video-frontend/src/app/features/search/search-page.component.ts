@@ -79,7 +79,7 @@ import {
               <p class="examples-hint">
                 No suggestions yet. Run the <strong>prompt-suggester</strong> DataEngine function
                 after segments are in <code>vss-collection</code> (writes to
-                <code>vss-prompts-events</code>).
+                <code>vss-events-collection</code>).
               </p>
             } @else {
               <ul class="example-list">
@@ -753,6 +753,7 @@ export class SearchPageComponent implements OnInit, OnDestroy, AfterViewInit {
       this.uploadDialogRef = this.dialog.open(UploadDialogComponent, {
         width: '600px',
         maxWidth: '95vw',
+        maxHeight: '85vh',
         panelClass: 'upload-dialog',
         disableClose: false,
         autoFocus: true,

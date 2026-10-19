@@ -13,7 +13,7 @@ def _svc() -> SuggestionsService:
         (),
         {"vdb_bucket": "bucket", "vdb_schema": "schema"},
     )()
-    svc._table_name = "vss-prompts-events"
+    svc._table_name = "vss-events-collection"
     return svc
 
 

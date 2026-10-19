@@ -25,13 +25,13 @@ Configure in `ingest/vss-video-ingest-secret-template.yaml`:
 - **Trigger**: S3 bucket event when video is uploaded to `video-chunks`
 - **Input**: Video file from S3
 - **Output**: Multiple video segments uploaded to `video-chunks-segments`
-- **Processing**: Uses FFmpeg for video segmentation and format conversion
+- **Processing**: Uses FFmpeg for video segmentation and format conversion. One chunk is cut at a time in the process, so a manual upload that publishes every chunk together does not start those jobs at once.
 - **Idempotency**: Skips processing if segments already exist
 
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `your.registry/vss-video-segmenter:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-dataengine-function-images))
+- **Image**: `<registry-host>/<path>/vss2-segmenter:<image-tag>` (build from `source-code`; see [the site deploy](../../../deployments/vss-deploy/README.md#get-vastde-and-roll-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
-- **Dependencies**: FFmpeg, Python 3.11, boto3 for S3 access
+- **Dependencies**: Python 3.12 (builder `vastdataorg/vast-builder:v5.5.0-sp2`), moviepy 1.0.3 with imageio-ffmpeg 0.4.9, `setuptools==75.8.2` (provides `pkg_resources`), boto3 for S3
 

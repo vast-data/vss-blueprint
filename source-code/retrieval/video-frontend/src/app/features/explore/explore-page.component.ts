@@ -816,6 +816,7 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
     this.uploadDialogRef = this.dialog.open(UploadDialogComponent, {
       width: '600px',
       maxWidth: '95vw',
+      maxHeight: '85vh',
       panelClass: 'upload-dialog',
     });
     this.uploadDialogRef.afterClosed().subscribe(() => {

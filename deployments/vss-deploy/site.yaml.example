@@ -1,0 +1,110 @@
+# Copy to site.yaml and fill every value. site.yaml is gitignored.
+
+site:
+  namespace: vss                     # Kubernetes namespace; must already exist and be attached to DataEngine
+  ingress_domain: vastdata.com       # hosts: vss-lab, vss-backend, vss-streamer, vss-batch-sync
+  kubeconfig:                        # optional path; the shell KUBECONFIG wins when set
+
+https:                               # optional. Leave cert and key empty for HTTP only.
+  cert:                              # path to the certificate; set together with key
+  key:                               # path to the private key
+  secret: vss-tls                    # Kubernetes TLS secret name
+
+k8s:
+  host:                              # a node that can reach VIP pools and the model servers
+  user:
+  password:
+
+vms:
+  host:                              # VMS address; vastde must already be logged in as this user
+  user:
+  password:
+  tenant:                            # tenant name only
+  view_policy:                       # existing view policy used for the new buckets
+
+dataengine:
+  cluster:                           # DataEngine Kubernetes cluster name
+  broker:                            # existing Kafka view; the script does not create it
+  topic: vss-topic                   # created on that broker
+  registry:                          # container registry name as registered in VMS
+  secret: vss2-secret                # function images read ctx.secrets["vss2-secret"]
+  pipeline: vss-pipeline             # 2-40 characters
+
+storage:
+  user: vss-user                     # local user the script creates
+  group:                             # existing local group; the user is attached to it
+  password:
+  s3_endpoint:                       # http://<s3-vip>
+  ingest_vdb_endpoint:               # http://<query-engine-vip> used by functions
+  backend_vdb_endpoint:              # http://<query-engine-vip> used by the backend
+  buckets:
+    chunks: vss-chunks
+    segments: vss-chunks-segments
+    database: vss-vastdb-bucket       # VastDB Bucket
+  output_bucket_suffix: "-segments"   # segmenter writes {chunks}{suffix}; that name must be buckets.segments
+  schema: vss-schema                  # VastDB Schema
+  collection: vss-collection          # VastDB VSS Table
+  prompts_collection: vss-events-collection  # VastDB Events Table
+
+images:
+  functions:                         # empty tag means latest
+    vss-segmenter:  { artifact: "dev/solutions/vss2-segmenter", tag: }
+    vss-detector:   { artifact: "dev/solutions/vss2-detector", tag: }
+    vss-reasoner:   { artifact: "dev/solutions/vss2-reasoner", tag: }
+    vss-embedder:   { artifact: "dev/solutions/vss2-embedder", tag: }
+    vss-vastdb:     { artifact: "dev/solutions/vss2-vastdb", tag: }
+    vss-suggester:  { artifact: "dev/solutions/vss2-events", tag: }
+  kubernetes:
+    backend:                         # registry/org/vss2-backend:tag
+    frontend:
+    streaming:
+    batch_sync:
+
+runtime:
+  cosmos:
+    host:
+    port: 8001
+    scheme: http
+    authorization:                     # optional Bearer token; leave empty for a local NIM
+    model: nvidia/cosmos-reason2-8b
+    max_tokens: 6000
+    temperature: 0.2
+  embed:
+    host:
+    port: 8002
+    scheme: http
+    authorization:                     # optional Bearer token; leave empty for a local NIM
+    model: nvidia/cosmos-embed1
+    dimensions: 256
+    local_nim: true
+    nvidia_api_key:                    # required when local_nim is false; unused for a local NIM
+  yolo:
+    host:
+    port: 8003
+    authorization:                     # optional Bearer token; leave empty for a local infer server
+    model: yolo-infer
+    conf: 0.4
+  segment_duration: 5
+  jwt_secret:                        # openssl rand -hex 32
+  vast_host:                         # VMS host the app uses for login
+  display_timezone: UTC
+
+pipeline:
+  triggers:
+    - { name: vss-chunk-trigger, type: Element, bucket: vss-chunks, suffix: .mp4 }
+    - { name: vss-segment-trigger, type: Element, bucket: vss-chunks-segments, prefix: segments, suffix: .mp4 }
+    - { name: vss-suggester-trigger, type: Schedule, cron: "0 0/5 * ? * * *" }
+  functions:
+    - { name: vss-segmenter,  min_cpu: 1000m, max_cpu: 3000m, min_memory: 1280Mi, max_memory: 2560Mi, max_concurrency: 4 }
+    - { name: vss-detector,   min_cpu: 1000m, max_cpu: 3000m, min_memory: 1280Mi, max_memory: 2560Mi, max_concurrency: 4 }
+    - { name: vss-reasoner,   min_cpu: 1000m, max_cpu: 3000m, min_memory: 1280Mi, max_memory: 2560Mi, max_concurrency: 4 }
+    - { name: vss-embedder,   min_cpu: 1000m, max_cpu: 3000m, min_memory: 1280Mi, max_memory: 2560Mi, max_concurrency: 4 }
+    - { name: vss-vastdb,     min_cpu: 1000m, max_cpu: 3000m, min_memory: 1280Mi, max_memory: 2560Mi, max_concurrency: 2 }
+    - { name: vss-suggester,  min_cpu: 1000m, max_cpu: 3000m, min_memory: 1280Mi, max_memory: 2560Mi, max_concurrency: 1 }
+  links:
+    - [vss-chunk-trigger, vss-segmenter]
+    - [vss-segment-trigger, vss-detector]
+    - [vss-detector, vss-reasoner]
+    - [vss-reasoner, vss-embedder]
+    - [vss-embedder, vss-vastdb]
+    - [vss-suggester-trigger, vss-suggester]

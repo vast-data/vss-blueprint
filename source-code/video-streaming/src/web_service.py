@@ -22,9 +22,17 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 import boto3
 from botocore.exceptions import ClientError
+import sys
 import uuid
+from pathlib import Path
+
+_here = Path(__file__).resolve()
+_shared = _here.parents[2] / "shared" if len(_here.parents) > 2 else None
+if _shared is not None and _shared.is_dir():
+    sys.path.insert(0, str(_shared))
 
 from ingest_metadata import build_s3_ingest_metadata
+from video_chunker import chunk_s3_metadata
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -61,6 +69,16 @@ def ffprobe_duration_sec(path: str) -> float | None:
     except ValueError:
         return None
     return value if value > 0 else None
+
+
+def is_browser_mp4(path: str) -> bool:
+    """True when the file is an ISO BMFF container (ftyp box)."""
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(12)
+    except OSError:
+        return False
+    return len(header) >= 8 and header[4:8] == b"ftyp"
 
 
 def _lazy_cv2():
@@ -190,18 +208,6 @@ class VideoCaptureService:
         except (TypeError, ValueError):
             return float(DEFAULT_CAPTURE_INTERVAL_SEC)
 
-    def _attach_stream_metadata(self, config, s3_metadata, chunk_index, chunk_start_sec):
-        """Add stream session indexing fields for downstream segment/VastDB rows."""
-        stream_id = config.get("stream_id")
-        if not stream_id:
-            return s3_metadata
-        s3_metadata["stream_id"] = str(stream_id)
-        s3_metadata["chunk_index"] = str(chunk_index)
-        s3_metadata["chunk_start_sec"] = f"{float(chunk_start_sec):.3f}"
-        s3_metadata["capture_interval"] = f"{self._capture_interval_sec(config):.3f}"
-        s3_metadata["ingest_kind"] = "stream_chunk"
-        return s3_metadata
-
     def _build_capture_s3_metadata(
         self,
         config,
@@ -223,11 +229,18 @@ class VideoCaptureService:
             custom_prompt=custom_prompt,
             capture_timestamp=capture_timestamp,
         )
-        s3_metadata = self._attach_stream_metadata(
-            config, s3_metadata, chunk_index, chunk_start_sec
-        )
-        if chunk_duration_sec is not None:
-            s3_metadata["chunk_duration_sec"] = f"{float(chunk_duration_sec):.3f}"
+        stream_id = config.get("stream_id")
+        if stream_id:
+            interval = self._capture_interval_sec(config)
+            duration = float(chunk_duration_sec) if chunk_duration_sec is not None else interval
+            s3_metadata.update(chunk_s3_metadata(
+                stream_id=str(stream_id),
+                chunk_index=int(chunk_index),
+                chunk_start_sec=float(chunk_start_sec),
+                chunk_duration_sec=duration,
+                capture_interval_sec=interval,
+                ingest_kind="stream_chunk",
+            ))
         return s3_metadata
         
     def is_youtube_url(self, url):
@@ -377,6 +390,8 @@ class VideoCaptureService:
             
             # Prepare extra args for metadata
             extra_args = {}
+            if str(s3_key).lower().endswith(".mp4"):
+                extra_args["ContentType"] = "video/mp4"
             if metadata:
                 extra_args['Metadata'] = metadata
                 logger.info(f"Adding S3 metadata: {metadata}")
@@ -489,6 +504,73 @@ class VideoCaptureService:
         except OSError as exc:
             logger.error("Failed to replace trimmed chunk %s: %s", path, exc)
             return False
+        return True
+
+    def _ensure_browser_mp4(self, path: str) -> bool:
+        """Remux a non-MP4 capture (live yt-dlp writes MPEG-TS into a .mp4 name).
+
+        Explore plays this parent file. A transport stream makes the video element fail
+        even though the backend returns 206. Search plays the segmenter MP4s instead.
+        """
+        if is_browser_mp4(path):
+            return True
+        logger.info("Capture is not a browser MP4; remuxing: %s", os.path.basename(path))
+        tmp_path = f"{path}.browser.mp4"
+        commands = (
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                path,
+                "-c",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+                "-movflags",
+                "+faststart",
+                "-avoid_negative_ts",
+                "make_zero",
+                tmp_path,
+            ],
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                path,
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                "-avoid_negative_ts",
+                "make_zero",
+                tmp_path,
+            ],
+        )
+        wrote = False
+        for cmd in commands:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            if not self._run_ffmpeg(cmd, 120, f"browser-mp4 {os.path.basename(path)}"):
+                continue
+            if is_browser_mp4(tmp_path) and os.path.getsize(tmp_path) > 0:
+                wrote = True
+                break
+        if not wrote:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            return False
+        try:
+            os.replace(tmp_path, path)
+        except OSError as exc:
+            logger.error("Failed to replace remuxed chunk %s: %s", path, exc)
+            return False
+        logger.info("Remuxed capture to browser MP4: %s", os.path.basename(path))
         return True
 
     def _normalize_chunk_duration(self, path: str, target_sec: float) -> bool:
@@ -694,6 +776,9 @@ class VideoCaptureService:
         nominal_chunk_sec: float,
     ) -> bool:
         nominal_chunk_sec = max(0.1, float(nominal_chunk_sec))
+        if not self._ensure_browser_mp4(temp_path):
+            logger.error("Cannot remux chunk to browser MP4 for %s", filename)
+            return False
         if not self._normalize_chunk_duration(temp_path, nominal_chunk_sec):
             logger.error("Cannot normalize chunk duration for %s", filename)
             return False

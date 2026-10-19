@@ -14,7 +14,7 @@ Three top-level modes share the same scope pills (**All Videos** / **My Videos**
 
 ### Search
 
-- Empty state shows **search suggestions** from `GET /api/v1/suggestions` (prompt-suggester grounded rephrases → `vss-prompts-events`). Clicking a suggestion fills the search bar only.
+- Empty state shows **search suggestions** from `GET /api/v1/suggestions` (prompt-suggester grounded rephrases → `vss-events-collection`). Clicking a suggestion fills the search bar only.
 - Clip cards: **upload time** badge (config timezone), **% match** badge, match timeline with segment jumps, reasoning caption and class chips.
 - Search animation phases follow the live request; model names come from `GET /api/v1/config` (Cosmos-Embed1, Cosmos-Reason2).
 - After a search, results persist when navigating away and back.
@@ -68,4 +68,4 @@ User settings in browser `localStorage`: Advanced Search & AI, system prompt, bb
 
 - Angular 18 · Angular Material · RxJS services · JWT in localStorage
 - Shared utilities: `video-hover-preview.util.ts`, `detection-overlay.util.ts`, `time.util.ts`
-- Deployed as static files behind Nginx — see [K8s deployment guide](../../../deployments/vss-k8s-application/README.md) or `source-code/scripts/build-retrieval-images.sh`
+- Deployed as static files behind Nginx — see [the site deploy](../../../deployments/vss-deploy/README.md) or `source-code/scripts/build-retrieval-images.sh`

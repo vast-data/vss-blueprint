@@ -25,12 +25,7 @@ The system has three main parts:
 
 ## Deployment
 
-| Component | Guide |
-|-----------|-------|
-| **VSS - Retrieval Web UI; K8s Application** (Backend, Frontend, Streaming, Batch Sync) | [vss-k8s-application](deployments/vss-k8s-application/README.md) |
-| **VSS - DataEngine; Ingest Pipeline** (Segmenter, Detector, Reasoner, Embedder, Writer) | [dataengine-vss-ingest-pipeline](deployments/dataengine-vss-ingest-pipeline/README.md) |
-| **VSS - DataEngine; Enrichment Pipeline** (prompt-suggester, optional) | [dataengine-vss-ingest-pipeline](deployments/dataengine-vss-ingest-pipeline/README.md) |
-| **GPU models** (Cosmos-Reason2, Cosmos-Embed1, YOLO11 on Docker) | [vss-blueprint-models](scripts/vss-blueprint-models/README.md) |
+Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide lists what must already exist (namespace attached to DataEngine, models reachable from a Kubernetes node, broker, images) and the `deploy.sh` flags.
 
 ### Quick Start
 
@@ -38,28 +33,20 @@ The system has three main parts:
 
 2. **Build and push images** (`REGISTRY` is required; `TAG` defaults to `v1`):
    ```bash
-   # K8s app (backend, frontend, streaming, batch-sync)
    REGISTRY=your.registry/vss source-code/scripts/build-retrieval-images.sh
-
-   # DataEngine functions (ingest + prompt-suggester)
    REGISTRY=your.registry/vss source-code/scripts/build-vastde-functions.sh
    ```
-   Details: [K8s Step 2](deployments/vss-k8s-application/README.md#step-2-docker-images) · [DataEngine build](deployments/dataengine-vss-ingest-pipeline/README.md#build-dataengine-function-images) · [scripts](source-code/scripts/README.md)
+   Details: [scripts](source-code/scripts/README.md)
 
-3. **Deploy K8s Application:**
+3. **Deploy the site:**
    ```bash
-   cd deployments/vss-k8s-application
-   vim backend-secret.yaml  # Configure credentials
-   ./QUICK_DEPLOY.sh <namespace> <cluster_name>
+   cd deployments/vss-deploy
+   cp site.yaml.example site.yaml
+   ./deploy.sh site.yaml --check
+   ./deploy.sh site.yaml
    ```
 
-4. **Deploy Ingest Pipeline** (choose one):
-   - **Using GUI:** Configure `vss-gui-secret-file-template.yaml`, then use DataEngine UI
-   - **Using CLI:** Configure `vss-cli-secret-file-template.yaml`, then run vastde commands
-   
-   See [Ingest Pipeline Guide](deployments/dataengine-vss-ingest-pipeline/README.md) for full instructions (optional enrichment is the last step of the same GUI or CLI path).
-
-5. **Test:** Upload a video and search at `http://video-lab.<cluster_name>.vastdata.com`
+4. **Test:** Upload a video and search at `http://vss-lab.<ingress_domain>` (HTTPS when `site.yaml` has both a cert and a key).
 
 ---
 
@@ -76,7 +63,7 @@ The system has three main parts:
 | **Stream chunks** | Same `stream_id` on upload, streaming, or batch sync; Explore plays chunk N/total with Previous/Next | [video-backend](source-code/retrieval/video-backend/README.md#upload-streams-and-delete) |
 | **Delete a video** | Explore delete, or `DELETE /api/v1/videos`, removes that upload’s S3 objects, VastDB rows, and sidecars | [video-backend](source-code/retrieval/video-backend/README.md#upload-streams-and-delete) |
 | **Data Dashboard** | VastDB stats, ingest health, S3 pipeline inventory, live key events | [video-frontend](source-code/retrieval/video-frontend/README.md#application-modes) |
-| **Search suggestions & key events** | Grounded ≤8-word rephrases of segment `reasoning_content` → `vss-prompts-events` | [prompt-suggester](source-code/enrichment/prompt-suggester/README.md) |
+| **Search suggestions & key events** | Grounded ≤8-word rephrases of segment `reasoning_content` → `vss-events-collection` | [prompt-suggester](source-code/enrichment/prompt-suggester/README.md) |
 | **Object detection counts** | YOLO peak concurrent per class (`object_counts`); UI chips + dashboard heatmap | [video-detector](source-code/ingest/video-detector/README.md) |
 | **Agent APIs** | Tool wrappers + grounded Q&A for external agents | [video-backend](source-code/retrieval/video-backend/README.md#agent-apis) |
 | **Time Filtering** | Filter by upload time (presets or custom range) | [video-backend](source-code/retrieval/video-backend/README.md#gui-settings) |
@@ -124,7 +111,7 @@ Upload Video → vss-chunks bucket
                     ↓
          prompt-suggester (optional enrichment)
                     ↓
-         vss-prompts-events (grounded search chips + key events)
+         vss-events-collection (grounded search chips + key events)
 ```
 
 **Search flow:** query embed (Cosmos-Embed1) → hybrid search (`reasoning_content` + visual) → clip cards with upload-time badge and match timeline → Cosmos-Reason2 synthesis → player with bbox overlay and `label N` object chips
@@ -143,6 +130,5 @@ Interactive diagram: open **Show Blueprint Diagram** in the app, or `source-code
 
 ## Need Help?
 
-- **K8s Deployment**: See [K8s Application Guide](deployments/vss-k8s-application/README.md#troubleshooting)
-- **Ingest / Enrichment Pipeline**: See [DataEngine Pipeline Guide](deployments/dataengine-vss-ingest-pipeline/README.md)
+- **Deploy**: See [vss-deploy](deployments/vss-deploy/README.md)
 - **Community**: [VAST Community Forums](https://community.vastdata.com/)

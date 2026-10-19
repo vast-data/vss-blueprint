@@ -1,6 +1,10 @@
-# Deploy K8s Application (Backend/Frontend)
+# Kubernetes app manifests
 
-Deploy the VSS Blueprint web application to Kubernetes.
+The install that creates storage, the pipeline, and this app is [the site deploy](../README.md). `deploy.sh` copies these files, writes `backend-secret.yaml` from `site.yaml`, and runs `QUICK_DEPLOY.sh`.
+
+Use this directory only when the storage user, buckets, topic, and pipeline already exist and you need to apply or update the web app by itself.
+
+`QUICK_DEPLOY.sh` expects `backend-secret.yaml` beside the script. The full deploy writes that file. A manual run copies the example and fills it in. Do not commit the filled file.
 
 ## Prerequisites
 
@@ -10,18 +14,18 @@ Deploy the VSS Blueprint web application to Kubernetes.
 
 - **VAST cluster access:**
   - Cluster name (e.g., `v1234`) - used as part of the URL
-  - VMS hostname and tenant name for user authentication (see [User Authentication](../../source-code/retrieval/video-backend/README.md))
+  - VMS hostname and tenant name for user authentication (see [User Authentication](../../../source-code/retrieval/video-backend/README.md))
 
 - **Storage resources:**
   - S3 buckets: `vss-chunks` and `vss-chunks-segments` (segmenter writes `{upload_bucket}-segments` by default)
-  - VastDB bucket: `vss-db`, schema `vss-schema`, tables `vss-collection` and `vss-prompts-events`
+  - VastDB bucket: `vss-vastdb-bucket`, schema `vss-schema`, tables `vss-collection` and `vss-events-collection`
 
 - **AI/ML services:**
   - Cosmos-Embed1 NIM (hybrid search embeddings)
   - Cosmos-Reason2 NIM (search/explore synthesis; same host as ingest reasoner)
   - YOLO11 infer service (ingest `video-detector`)
   - Optional NVIDIA Cloud API key when `embedding_local_nim: false`
-  - GPU host deploy: [vss-blueprint-models](../../scripts/vss-blueprint-models/README.md)
+  - GPU host deploy: [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md)
 
 - **Network access:**
   - Ability to modify `/etc/hosts` on your local machine
@@ -39,25 +43,24 @@ vim backend-secret.yaml
 
 | Section | Key Settings |
 |---------|--------------|
-| **VastDB** | `vdb_endpoint`, `vdb_bucket` (`vss-db`), `vdb_schema` (`vss-schema`), `vdb_collection` (`vss-collection`), `vdb_prompts_collection` (`vss-prompts-events`), credentials |
+| **VastDB** | `vdb_endpoint`, `vdb_bucket` (`vss-vastdb-bucket`), `vdb_schema` (`vss-schema`), `vdb_collection` (`vss-collection`), `vdb_prompts_collection` (`vss-events-collection`), credentials |
 | **S3** | `s3_endpoint` (must match tenant), `s3_upload_bucket` (`vss-chunks`), `s3_segments_bucket` (`vss-chunks-segments`), credentials |
 | **Cosmos-Embed1** | `embedding_host`, `embedding_port`, `embedding_model`, `embedding_local_nim`, `nvidia_api_key` |
 | **Cosmos-Reason2** | `cosmos_host`, `cosmos_port`, `cosmoshttpscheme`, `cosmos_model`, `synthesis_*` |
 | **UI** | `display_timezone` (IANA, e.g. `Asia/Jerusalem`) |
-| **Auth** | `vast_host`, `tenant_name`, `jwt_secret` (see [setup](../../source-code/retrieval/video-backend/README.md#user-authentication)) |
+| **Auth** | `vast_host`, `tenant_name`, `jwt_secret` (see [setup](../../../source-code/retrieval/video-backend/README.md#user-authentication)) |
 
 ---
 
 ## Step 2: Docker Images
 
-Build images with the helper script (recommended) or manually. Replace registry paths in each `*-deployment.yaml`.
+Build images from the repo root, then set those image strings in each `*-deployment.yaml`.
 
 ```bash
-# Recommended — sets REGISTRY/TAG; builds backend, frontend, streaming, batch-sync
 REGISTRY=your.registry/vss TAG=v1 source-code/scripts/build-retrieval-images.sh
 ```
 
-Manual builds from `source-code/` as context (see [shared README](../../source-code/shared/README.md#docker-builds)):
+Manual builds from `source-code/` as context (see [shared README](../../../source-code/shared/README.md#docker-builds)):
 
 ```bash
 cd source-code
@@ -78,11 +81,13 @@ If your cluster requires a specific architecture (for example `linux/amd64`), ad
 ## Step 3: Deploy
 
 ```bash
-./QUICK_DEPLOY.sh <namespace> <cluster_name>
+./QUICK_DEPLOY.sh <namespace> <ingress_domain>
 
 # Example:
-./QUICK_DEPLOY.sh vastvideo v1234
+./QUICK_DEPLOY.sh vss vastdata.com
 ```
+
+Ingress hosts are `vss-lab`, `vss-backend`, `vss-streamer`, and `vss-batch-sync` under that domain. Image references in the deployment YAML are placeholders. `deploy.sh` replaces them from `site.yaml`. A manual run must set those image strings before applying.
 
 **What gets deployed:**
 - Backend Service (FastAPI) - REST API
@@ -108,9 +113,9 @@ Get ingress IP:
 kubectl get ingress -n <namespace>
 ```
 
-Add to `/etc/hosts` (on your local machine):
+Add to `/etc/hosts` (on your local machine) when you are not using the ingress domain's DNS:
 ```
-<INGRESS_IP> video-lab.<cluster_name>.vastdata.com
+<INGRESS_IP> vss-lab.<ingress_domain>
 ```
 
 ---
@@ -118,8 +123,10 @@ Add to `/etc/hosts` (on your local machine):
 ## Step 6: Access UI
 
 ```
-http://video-lab.<cluster_name>.vastdata.com
+http://vss-lab.<ingress_domain>
 ```
+
+With `https.cert` and `https.key` set in `site.yaml`, the full deploy serves this host over HTTPS.
 
 ---
 
@@ -132,7 +139,7 @@ http://video-lab.<cluster_name>.vastdata.com
 
 ### Authentication fails
 - Verify `s3_endpoint` matches tenant
-- See [User Authentication](../../source-code/retrieval/video-backend/README.md#user-authentication)
+- See [User Authentication](../../../source-code/retrieval/video-backend/README.md#user-authentication)
 
 ### View Logs
 

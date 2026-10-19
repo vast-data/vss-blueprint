@@ -36,4 +36,4 @@ Default ports (**8001 / 8002 / 8003**) match VSS convention. Point `cosmos_*`, `
 
 See **[DEPLOY.md](DEPLOY.md)** for prerequisites, GPU layout, environment variables, health checks, and tear down.
 
-Secret field names: [Ingest pipeline](../../deployments/dataengine-vss-ingest-pipeline/README.md) and [K8s application](../../deployments/vss-k8s-application/README.md). Vector dims / local NIM notes: [COSMOS_LOCAL_STACK.md](../../docs/COSMOS_LOCAL_STACK.md).
+The [site deploy](../../deployments/vss-deploy/README.md) puts these hosts in `site.yaml`. Vector dims / local NIM notes: [COSMOS_LOCAL_STACK.md](../../docs/COSMOS_LOCAL_STACK.md).

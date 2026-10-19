@@ -12,7 +12,7 @@ DataEngine function that converts video reasoning text into vector embeddings fo
 
 ## Easy to Adjust
 
-Configure in `deployments/dataengine-vss-ingest-pipeline/vss-gui-secret-file-template.yaml`:
+The [site deploy](../../../deployments/vss-deploy/README.md) writes these keys into the DataEngine secret from `site.yaml`:
 
 | Setting | Description |
 |---------|-------------|
@@ -38,6 +38,6 @@ Local stack guide: `docs/COSMOS_LOCAL_STACK.md`
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `your.registry/vss-video-embedder:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-dataengine-function-images))
+- **Image**: `<registry-host>/<path>/vss2-embedder:<image-tag>` (build from `source-code`; see [the site deploy](../../../deployments/vss-deploy/README.md#get-vastde-and-roll-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
-- **Dependencies**: Python 3.11, Cosmos-Embed1 NIM access
+- **Dependencies**: Python 3.12 (builder `vastdataorg/vast-builder:v5.5.0-sp2`), Cosmos-Embed1 NIM access

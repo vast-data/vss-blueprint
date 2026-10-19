@@ -82,7 +82,7 @@ class SuggestionsService:
             ssl_verify=False,
         )
         self._table_name = getattr(
-            self.settings, "vdb_prompts_collection", "vss-prompts-events"
+            self.settings, "vdb_prompts_collection", "vss-events-collection"
         )
 
     def _read_all_rows(self) -> tuple[List[dict], bool, Optional[str]]:

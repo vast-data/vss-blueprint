@@ -92,6 +92,14 @@ const STORAGE_KEY = 'video_lab_system_prompt';
     </div>
   `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     .dialog-container {
       display: flex;
       flex-direction: column;
@@ -99,10 +107,15 @@ const STORAGE_KEY = 'video_lab_system_prompt';
       color: var(--text-primary);
       min-width: 550px;
       max-width: 700px;
+      max-height: 85vh;
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
       transition: background 0.3s ease, color 0.3s ease;
     }
 
     .dialog-header {
+      flex: 0 0 auto;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -145,6 +158,10 @@ const STORAGE_KEY = 'video_lab_system_prompt';
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      max-height: calc(85vh - 9.5rem);
 
       .description {
         margin: 0;
@@ -285,6 +302,7 @@ const STORAGE_KEY = 'video_lab_system_prompt';
     }
 
     .dialog-actions {
+      flex: 0 0 auto;
       display: flex;
       justify-content: flex-end;
       gap: 1rem;

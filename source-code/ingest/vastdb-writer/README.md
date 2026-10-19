@@ -38,7 +38,7 @@ Configure in `ingest/vss-video-ingest-secret-template.yaml`:
 ## What Runs It
 
 - **Runtime**: VAST DataEngine serverless runtime
-- **Image**: `your.registry/vss-vastdb-writer:v1` (placeholder — build with `vastde build` and push; see [Ingest pipeline guide](../../../deployments/dataengine-vss-ingest-pipeline/README.md#build-dataengine-function-images))
+- **Image**: `<registry-host>/<path>/vss2-vastdb:<image-tag>` (build from `source-code`; see [the site deploy](../../../deployments/vss-deploy/README.md#get-vastde-and-roll-function-images))
 - **Resources**: Configure CPU/Memory in DataEngine UI pipeline settings
-- **Dependencies**: Python 3.11, ADBC driver for VastDB, libadbc_driver_vastdb.so
+- **Dependencies**: Python 3.12 (builder `vastdataorg/vast-builder:v5.5.0-sp2`), ADBC driver for VastDB, libadbc_driver_vastdb.so
 

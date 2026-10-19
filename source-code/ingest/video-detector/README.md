@@ -31,9 +31,12 @@ Also requires S3 keys (`s3accesskey`, `s3secretkey`, `s3endpoint`) and optional 
 
 ## Build
 
+From `<checkout>/source-code`, with `TAG=<image-tag>` and `REG=<registry-host>/<path>`:
+
 ```bash
-cd source-code/ingest/video-detector
-vastde functions build vss-video-detector
+(cd ingest/video-detector && vastde functions build vss2-detector)
+docker tag "vss2-detector:latest" "${REG}/vss2-detector:${TAG}"
+docker push "${REG}/vss2-detector:${TAG}"
 ```
 
-Or `./source-code/scripts/build-vastde-functions.sh`.
+All six functions: [Get vastde and roll function images](../../../deployments/vss-deploy/README.md#get-vastde-and-roll-function-images).

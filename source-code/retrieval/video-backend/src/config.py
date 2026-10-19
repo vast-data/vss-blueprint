@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     
     # VastDB Settings
     vdb_endpoint: str = Field(..., description="VastDB endpoint")
-    vdb_bucket: str = Field(default="videoreasoningdb", description="VastDB bucket")
-    vdb_schema: str = Field(default="video_schema", description="VastDB schema")
-    vdb_collection: str = Field(default="processedvideos", description="VastDB collection")
+    vdb_bucket: str = Field(default="vss-vastdb-bucket", description="VastDB bucket")
+    vdb_schema: str = Field(default="vss-schema", description="VastDB schema")
+    vdb_collection: str = Field(default="vss-collection", description="VastDB collection")
     vdb_prompts_collection: str = Field(
-        default="vss-prompts-events",
+        default="vss-events-collection",
         description="Table for LLM-generated search prompts and key events",
     )
     vdb_access_key: str = Field(..., description="VastDB access key")
@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     s3_endpoint: str = Field(..., description="S3 endpoint URL")
     s3_access_key: str = Field(..., description="S3 access key")
     s3_secret_key: str = Field(..., description="S3 secret key")
-    s3_upload_bucket: str = Field(default="video-uploads", description="S3 bucket for video uploads")
-    s3_segments_bucket: str = Field(default="video-segments", description="S3 bucket for processed video segments")
+    s3_upload_bucket: str = Field(default="vss-chunks", description="S3 bucket for video uploads")
+    s3_segments_bucket: str = Field(default="vss-chunks-segments", description="S3 bucket for processed video segments")
     s3_region: str = Field(default="us-east-1", description="S3 region")
     s3_use_ssl: bool = False
     

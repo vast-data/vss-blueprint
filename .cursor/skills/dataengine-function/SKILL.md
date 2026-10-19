@@ -72,45 +72,129 @@ def from_ctx_secrets(cls, secrets: Dict[str, Any]) -> "Settings":
     return cls(**config)
 ```
 
-- Add function-specific keys to `deployments/dataengine-vss-ingest-pipeline/vss-gui-secret-file-template.yaml` (and vss2 copy).
+- Add function-specific keys to `deployments/vss-deploy/site.yaml`. The site deploy writes the live secret from that file. See `deployments/vss-deploy/README.md`.
 
 ## Standard `requirements.txt`
 
-Start **every** DataEngine function (ingest, enrichment, new jobs) with this full block — copy verbatim, do not drop lines:
+Aligned with DataEngine **5.5.0-sp2** (builder `vastdataorg/vast-builder:v5.5.0-sp2`, Python 3.12.13). `vast-constraints-buildpack` injects pins at build time. Lifecycle exit 51 is pip failing those constraints (`vastde functions build -v 5`; that failure does not write `build.log`).
+
+Every function starts with:
 
 ```
 # Cloud events
-cloudevents==1.10.1
-
-# VastDB Python SDK and dependencies
-vastdb==1.3.2
-ibis-framework[duckdb]==9.0.0
-
-# PyArrow for data handling
-pyarrow
+cloudevents==1.11.0
 
 # Data validation
-pydantic==2.5.2
-pydantic-settings==2.1.0
-
-# OpenTelemetry for tracing (all four required by DataEngine runtime)
-opentelemetry-api==1.38
-opentelemetry-sdk==1.38
-opentelemetry-exporter-otlp==1.38
-opentelemetry-processor-baggage==0.59b0
+pydantic==2.10.6
+pydantic-settings==2.7.1
 ```
 
-**OpenTelemetry:** include `opentelemetry-processor-baggage==0.59b0` on every function. Older ingest `requirements.txt` files often omitted it — add it whenever you touch deps.
+`cloudevents==1.11.0` matches the constraint `>=1.11.0,<2`. `pydantic==2.10.6` is required because the runtime FastAPI imports `IncEx` from `pydantic.main` (present since pydantic 2.7). The constraint `pydantic>=2.1.1,<3` still accepts 2.5.x, and that pin lands in the pip layer ahead of the runtime copy. The pod then dies at import with `ImportError: cannot import name 'IncEx'`.
 
-Ingest functions that must carry the full OTel block: `video-segmenter`, `video-reasoner`, `video-embedder`, `vastdb-writer`.
+Leave OpenTelemetry out of `requirements.txt`. The buildpack installs `opentelemetry-api==1.39.0`, `opentelemetry-sdk==1.39.0`, `opentelemetry-exporter-otlp==1.39.0`, and `opentelemetry-processor-baggage==0.60b0`. `from opentelemetry import trace` still resolves. Pinning 1.38 fails resolution against those exact versions.
 
-Add only what the function needs below this block, with versions aligned to siblings:
+VastDB functions (`vastdb-writer`, `video-reasoner`, `video-embedder`, `prompt-suggester`) also include:
 
-| Need | Add |
-|------|-----|
-| S3 | `boto3`, `botocore` (see video-segmenter) |
-| HTTP / LLM / NIM | `requests==2.31.0` (see video-reasoner) |
-| Do **not** add | `httpx`, unpinned `vastdb`, `pandas` unless required |
+```
+vastdb==1.3.2
+ibis-framework[duckdb]==9.0.0
+pyarrow
+```
+
+S3 functions pin `boto3` / `botocore`. HTTP/LLM functions pin `requests==2.31.0`. A boto3 pin is fine next to the runtime's own boto3 extra. Avoid `httpx`, unpinned `vastdb`, and pandas unless required.
+
+`video-segmenter` is the only function that imports MoviePy. Add:
+
+```
+moviepy==1.0.3
+imageio-ffmpeg==0.4.9
+setuptools==75.8.2
+```
+
+`imageio-ffmpeg` 0.4.9 imports `pkg_resources` while loading `moviepy.editor`. The 3.12 runtime does not ship setuptools, so that import raises `ModuleNotFoundError: No module named 'pkg_resources'`. `setuptools==75.8.2` still provides `pkg_resources` (removed in setuptools 82). Only the segmenter needs this pin.
+
+## Get vastde and roll function images
+
+Aligned with DataEngine **5.5.0-sp2**: CLI `vastde` v5.5.0-sp2 and builder `vastdataorg/vast-builder:v5.5.0-sp2`. Run this on the Linux host that has Docker and the function source (`linux/amd64`). Pulling `vastdataorg/vast-builder` leaves the CLI on whatever builder it already had; `vastde builders set` is what selects it. `<image-tag>` is the tag you push for the function images. It is separate from the 5.5.0-sp2 CLI and builder versions. Full write-up: `deployments/vss-deploy/README.md`.
+
+### 1. Put the CLI on `PATH`
+
+```bash
+mkdir -p "$HOME/bin"
+curl -fsSL -o "$HOME/bin/vastde" \
+  https://github.com/vast-data/dataengine-cli/releases/download/v5.5.0-sp2/vastde_linux_amd64
+chmod +x "$HOME/bin/vastde"
+case ":$PATH:" in
+  *":$HOME/bin:"*) ;;
+  *) echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc" ;;
+esac
+export PATH="$HOME/bin:$PATH"
+hash -r
+vastde version
+```
+
+`vastde version` prints `v5.5.0-sp2`. The darwin binary is a different build; function images are built on this Linux host.
+
+### 2. Log in and select the builder
+
+Tenant, user, and VMS host come from `site.yaml` (`vms.tenant`, `vms.user`, `vms.host`). Type the password when asked. Leave it out of the repo.
+
+```bash
+vastde config init \
+  --tenant <vms.tenant> \
+  --username <vms.user> \
+  --vms-url https://<vms.host> \
+  --builder-image-url vastdataorg/vast-builder:v5.5.0-sp2
+vastde config set --password
+vastde builders set v5.5.0-sp2
+vastde builders inspect
+vastde config view
+```
+
+`builders inspect` shows `vastdataorg/vast-builder:v5.5.0-sp2`. If `~/.vast/config.toml` already exists, `config init` stops until you pass `--force`, or you set the same fields with `vastde config set`.
+
+### 3. Build and push a new tag
+
+From the `source-code` directory. `vastde functions build <name>` writes a local image `<name>:latest`. Push that to the artifact in `site.yaml` (`dev/solutions/vss2-*`). In zsh, write `"${name}:latest"`.
+
+Use a new tag for every rebuild. Pushing a tag the pipeline already runs does not change the pods.
+
+```bash
+cd <checkout>/source-code
+TAG=<image-tag>
+REG=<registry-host>/<path>
+
+build() {
+  local dir="$1" name="$2"
+  echo "==> ${name}"
+  (cd "${dir}" && vastde functions build "${name}") || return 1
+  docker tag "${name}:latest" "${REG}/${name}:${TAG}" || return 1
+  docker push "${REG}/${name}:${TAG}"
+}
+
+build ingest/video-segmenter vss2-segmenter
+build ingest/video-detector vss2-detector
+build ingest/video-reasoner vss2-reasoner
+build ingest/video-embedder vss2-embedder
+build ingest/vastdb-writer vss2-vastdb
+build enrichment/prompt-suggester vss2-events
+```
+
+Log in to that registry before `docker push`. A lifecycle exit 51 is the constraints buildpack. Rerun with `-v 5`. In `site.yaml`, write `tag: <image-tag>` (space after the colon).
+
+`build-vastde-functions.sh` runs the same six builds. It reads `REGISTRY` and `TAG` instead of `REG`.
+
+### 4. Publish the new revision
+
+`./deploy.sh` skips a function that already exists and redeploys the pipeline on the revision it already has. Changing `tag` in `site.yaml` does not roll those pods.
+
+```bash
+for name in vss-segmenter vss-detector vss-reasoner vss-embedder vss-vastdb vss-suggester; do
+  vastde functions update "$name" --image-tag "$TAG" --publish
+done
+```
+
+In the pipeline builder, set every function to the revision just published and deploy `vss-pipeline`.
 
 ## VastDB reads on `vss-collection`
 
@@ -123,8 +207,7 @@ Tables include `vectors` / `vectors_visual`. Import `common/vastdb_patch.py` bef
 
 ## Pipeline YAML
 
-- Ingest: `deployments/dataengine-vss-ingest-pipeline/vss-ingest-pipeline-file.yaml`
-- Enrichment (scheduled): `deployments/dataengine-vss-ingest-pipeline/vss-enrichment-pipeline-file.yaml`
+- Site pipeline and secret: `deployments/vss-deploy/site.yaml`. See `deployments/vss-deploy/README.md`.
 - Pattern: `secrets: [vss2-secret]`, `function_deployments`, `links` (trigger → function), `triggers` with Schedule VRN.
 
 ## Reference implementations
@@ -137,7 +220,7 @@ Tables include `vectors` / `vectors_visual`. Import `common/vastdb_patch.py` bef
 
 ## Checklist for a new function
 
-1. Copy layout + standard `requirements.txt` (including `opentelemetry-processor-baggage==0.59b0`).
+1. Copy layout + the standard `requirements.txt` block (`cloudevents==1.11.0`, `pydantic==2.10.6`, `pydantic-settings==2.7.1`). Leave OpenTelemetry unpinned. Segmenter also pins `setuptools==75.8.2`.
 2. `Settings` + secret template keys.
 3. `init` stores clients on `ctx`; `handler` uses spans and structured return dict.
 4. VastDB patch if selecting from collection table.
