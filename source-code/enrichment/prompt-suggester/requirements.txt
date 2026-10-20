@@ -12,5 +12,5 @@ pyarrow
 pydantic==2.10.6
 pydantic-settings==2.7.1
 
-# HTTP (Cosmos Reason2 chat completions — same as video-reasoner)
+# HTTP (Cosmos Reason3 chat completions — same as video-reasoner)
 requests==2.31.0

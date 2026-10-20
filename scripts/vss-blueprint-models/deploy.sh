@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Deploy VSS GPU services on bare-metal RTX (Docker).
-# Location: scripts/vss-blueprint-models/  Docs: DEPLOY.md
+# Location: scripts/vss-blueprint-models/  Docs: README.md
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 YOLO_SRC="${YOLO_INFER_DIR:-$SCRIPT_DIR/yolo-infer}"
 YOLO_IMAGE="${YOLO_IMAGE:-yolo-infer:latest}"
 
-REASON2_IMAGE="nvcr.io/nim/nvidia/cosmos-reason2-8b:1.7.0"
+REASONER_IMAGE="nvcr.io/nim/nvidia/cosmos3-reasoner:1.7.0"
+REASONER_CONTAINER="cosmos3-nano-reasoner"
 EMBED_IMAGE="nvcr.io/nim/nvidia/cosmos-embed1:1.1.0"
 
 REASONER_PORT="${REASONER_PORT:-8001}"
@@ -25,23 +26,24 @@ REASONER_GPU=""
 usage() {
   cat <<'EOF'
 Deploy VSS GPU services on bare-metal RTX (Docker).
-Docs: DEPLOY.md
+Docs: README.md
 
 Usage:
-  ./deploy.sh GPU [REASONER_GPU] [options]
+  ./deploy.sh [GPU] [REASONER_GPU] [options]
 
-  GPU           GPU for Embed1 + YOLO (and Reason2 if REASONER_GPU omitted)
-  REASONER_GPU  GPU for Cosmos-Reason2 (optional; defaults to GPU)
+  No GPU index treats every GPU as free:
+    one GPU      → all selected services on that GPU
+    two or more  → Embed1+YOLO on the first, Reason3 nano on the second
 
-  One GPU  → all selected services share that device
-  Two GPUs → Embed1+YOLO on first, Reason2 on second
+  GPU           Pin Embed1 + YOLO (and Reason3 nano if REASONER_GPU omitted)
+  REASONER_GPU  Pin Cosmos-Reason3 nano
 
 Options:
   --all                 Deploy all (default if no --reasoner/--embedder/--yolo)
-  --reasoner            Deploy Reason2 only
+  --reasoner            Deploy Reason3 nano only
   --embedder            Deploy Embed1 only
   --yolo                Deploy YOLO only
-  --reasoner-port P     Host port for Reason2 (default: 8001)
+  --reasoner-port P     Host port for Reason3 nano (default: 8001)
   --embed-port P        Host port for Embed1 (default: 8002)
   --yolo-port P         Host port for YOLO (default: 8003)
   --ngc-api-key K       NGC API key (or set NGC_API_KEY)
@@ -106,13 +108,17 @@ if [[ "$DEPLOY_ALL" == true ]]; then
   DEPLOY_YOLO=true
 fi
 
-[[ -n "$EMBED_YOLO_GPU" ]] || {
-  echo "error: need at least one GPU index" >&2
-  usage
-  exit 1
-}
-# One GPU → run all selected services on that device
-if [[ -z "$REASONER_GPU" ]]; then
+if [[ -z "$EMBED_YOLO_GPU" ]]; then
+  mapfile -t _gpus < <(nvidia-smi --query-gpu=index --format=csv,noheader | tr -d ' ')
+  [[ ${#_gpus[@]} -ge 1 ]] || { echo "error: nvidia-smi reported no GPUs" >&2; exit 1; }
+  EMBED_YOLO_GPU="${_gpus[0]}"
+  if [[ ${#_gpus[@]} -ge 2 ]]; then
+    REASONER_GPU="${_gpus[1]}"
+  else
+    REASONER_GPU="${_gpus[0]}"
+  fi
+  echo "Treating ${#_gpus[@]} GPU(s) as free: embed+yolo=$EMBED_YOLO_GPU reasoner=$REASONER_GPU"
+elif [[ -z "$REASONER_GPU" ]]; then
   REASONER_GPU="$EMBED_YOLO_GPU"
 fi
 
@@ -141,7 +147,7 @@ fi
 echo "NGC login (nvcr.io)..."
 echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
 
-mkdir -p "$HOME/.cache/nim/cosmos-reason2" "$HOME/.cache/nim/cosmos-embed1"
+mkdir -p "$HOME/.cache/nim/cosmos3-nano" "$HOME/.cache/nim/cosmos-embed1"
 
 gpu_run() {
   local gpu="$1"
@@ -150,18 +156,19 @@ gpu_run() {
 }
 
 deploy_reasoner() {
-  echo "==> Reason2 on GPU $REASONER_GPU (:$REASONER_PORT)"
-  docker rm -f cosmos-reason2-8b 2>/dev/null || true
+  echo "==> Reason3 nano on GPU $REASONER_GPU (:$REASONER_PORT)"
+  docker rm -f "$REASONER_CONTAINER" 2>/dev/null || true
   gpu_run "$REASONER_GPU" \
-    --name cosmos-reason2-8b \
+    --name "$REASONER_CONTAINER" \
     --restart unless-stopped \
     --ipc=host \
     --shm-size=32g \
     -p "${REASONER_PORT}:8000" \
     -e "NGC_API_KEY=${NGC_API_KEY}" \
+    -e NIM_MODEL_SIZE=nano \
     -e NIM_CACHE_PATH=/opt/nim/.cache \
-    -v "$HOME/.cache/nim/cosmos-reason2:/opt/nim/.cache" \
-    "$REASON2_IMAGE"
+    -v "$HOME/.cache/nim/cosmos3-nano:/opt/nim/.cache" \
+    "$REASONER_IMAGE"
 }
 
 deploy_embed() {
@@ -256,11 +263,11 @@ if [[ "$DEPLOY_YOLO" == true ]]; then deploy_yolo; fi
 echo ""
 echo "Done. Status:"
 docker ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}' \
-  | grep -E 'cosmos-reason2|cosmos-embed1|yolo-infer|NAMES' || true
+  | grep -E 'cosmos3-nano|cosmos-embed1|yolo-infer|NAMES' || true
 echo ""
 echo "Health (polls until ready or timeout):"
 if [[ "$DEPLOY_REASONER" == true ]]; then
-  wait_health cosmos-reason2-8b reason2 "$REASONER_PORT" /v1/health/ready 600
+  wait_health "$REASONER_CONTAINER" reason3 "$REASONER_PORT" /v1/health/ready 600
 fi
 if [[ "$DEPLOY_EMBEDDER" == true ]]; then
   wait_health cosmos-embed1 embed1 "$EMBED_PORT" /v1/health/ready 180

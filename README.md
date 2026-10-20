@@ -1,7 +1,9 @@
 # VAST DataEngine - Video Search and Summarization (VSS) Foundation Stack
 
 
-- A Real-Time Video Search and Analysis system powered by [VAST DataEngine](https://www.vastdata.com/platform/dataengine), using [Nvidia NIM's](https://www.nvidia.com/en-eu/ai-data-science/products/nim-microservices/) & [Cosmos-Reason Models](https://huggingface.co/nvidia/Cosmos-Reason2-8B).
+- A Real-Time Video Search and Analysis system powered by [VAST DataEngine](https://www.vastdata.com/platform/dataengine) and [Nvidia NIMs](https://www.nvidia.com/en-eu/ai-data-science/products/nim-microservices/).
+
+- Models: **Cosmos-Reason3** nano (`nvidia/cosmos3-nano-reasoner`) for video reasoning and search synthesis, **Cosmos-Embed1** (`nvidia/cosmos-embed1`, 256-dim) for text and visual embeddings, and **YOLO11** for object detection. GPU install: [vss-blueprint-models](scripts/vss-blueprint-models/README.md).
 
 - This Blueprint is were released to bridge the gap between [NVIDIA’s VSS reference architectures](https://build.nvidia.com/nvidia/video-search-and-summarization/blueprintcard), and showcases the e2e utilization of the full VAST AI OS production-grade capabilities,
 including Agentic & Serverless Event-based Compute Framework and VastDB Vector-Store.
@@ -29,7 +31,7 @@ Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide
 
 ### Quick Start
 
-1. **GPU models** (Reason2, Embed1, YOLO on a GPU host): [vss-blueprint-models](scripts/vss-blueprint-models/README.md)
+1. **GPU models** (Reason3, Embed1, YOLO on a GPU host): [vss-blueprint-models](scripts/vss-blueprint-models/README.md)
 
 2. **Build and push images** (`REGISTRY` is required; `TAG` defaults to `v1`):
    ```bash
@@ -86,7 +88,7 @@ Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide
 | [video-batch-sync](source-code/video-batch-sync/README.md) | S3 batch copy service |
 | [video-segmenter](source-code/ingest/video-segmenter/README.md) | Splits videos into segments |
 | [video-detector](source-code/ingest/video-detector/README.md) | YOLO11 object detection + peak counts + bbox sidecars |
-| [video-reasoner](source-code/ingest/video-reasoner/README.md) | Plain searchable `reasoning_content` (Cosmos-Reason2) |
+| [video-reasoner](source-code/ingest/video-reasoner/README.md) | Plain searchable `reasoning_content` (Cosmos-Reason3) |
 | [video-embedder](source-code/ingest/video-embedder/README.md) | Text (`reasoning_content`) + visual embeddings |
 | [vastdb-writer](source-code/ingest/vastdb-writer/README.md) | Stores vectors and segment rows in VastDB |
 
@@ -101,7 +103,7 @@ Upload Video → vss-chunks bucket
                     ↓
             video-detector (YOLO11 → object_classes + peak object_counts + bbox sidecars)
                     ↓
-            video-reasoner (Cosmos-Reason2 → searchable plain reasoning_content ≤1024)
+            video-reasoner (Cosmos-Reason3 → searchable plain reasoning_content ≤1024)
                     ↓
             video-embedder (vectors from reasoning_content + vectors_visual from MP4)
                     ↓
@@ -114,7 +116,7 @@ Upload Video → vss-chunks bucket
          vss-events-collection (grounded search chips + key events)
 ```
 
-**Search flow:** query embed (Cosmos-Embed1) → hybrid search (`reasoning_content` + visual) → clip cards with upload-time badge and match timeline → Cosmos-Reason2 synthesis → player with bbox overlay and `label N` object chips
+**Search flow:** query embed (Cosmos-Embed1) → hybrid search (`reasoning_content` + visual) → clip cards with upload-time badge and match timeline → Cosmos-Reason3 synthesis → player with bbox overlay and `label N` object chips
 
 **Explore flow:** browse by upload date and **location** (fully indexed chunks only) → clip cards with segment timeline and upload-time badge → full-chunk player with bbox toggle and **Summarize Video**
 

@@ -66,7 +66,7 @@ runtime:
     port: 8001
     scheme: http
     authorization:                     # optional Bearer token; leave empty for a local NIM
-    model: nvidia/cosmos-reason2-8b
+    model: nvidia/cosmos3-nano-reasoner
     max_tokens: 6000
     temperature: 0.2
   embed:

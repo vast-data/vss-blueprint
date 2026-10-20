@@ -1,11 +1,11 @@
 # Video Reasoner
 
-DataEngine function that analyzes video segments using **Cosmos-Reason2** to generate plain-text descriptions.
+DataEngine function that analyzes video segments using **Cosmos-Reason3** to generate plain-text descriptions.
 
 ## What It Does
 
 - Triggered when segments land in `video-chunks-segments` bucket
-- Sends segment MP4 (base64) to Cosmos-Reason2
+- Sends segment MP4 (base64) to Cosmos-Reason3
 - Produces normalized `reasoning_content` (plain prose, max 1024 chars)
 - Shared instruction asks for searchable atoms (color, brand/logo, vehicle type, sign text, clear counts, action, likely next move) when clearly visible — still plain prose, no inventing
 - YOLO object classes from upstream detector are injected into the prompt
@@ -15,7 +15,7 @@ DataEngine function that analyzes video segments using **Cosmos-Reason2** to gen
 
 The [site deploy](../../../deployments/vss-deploy/README.md) writes these keys into the DataEngine secret from `site.yaml`:
 
-### Cosmos-Reason2 Settings
+### Cosmos-Reason3 Settings
 
 | Setting | Default |
 |---------|---------|
@@ -23,7 +23,7 @@ The [site deploy](../../../deployments/vss-deploy/README.md) writes these keys i
 | `cosmos_port` | 8001 |
 | `cosmoshttpscheme` | `http` (set `https` for TLS-terminated endpoints) |
 | `cosmos_authorization` | (optional) Bearer token sent as `Authorization` when set |
-| `cosmos_model` | nvidia/cosmos-reason2-8b |
+| `cosmos_model` | nvidia/cosmos3-nano-reasoner |
 | `cosmos_max_tokens` | 4000 |
 | `cosmos_temperature` | 0.2 |
 

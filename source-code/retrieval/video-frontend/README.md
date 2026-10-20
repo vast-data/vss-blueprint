@@ -8,7 +8,7 @@ Three top-level modes share the same scope pills (**All Videos** / **My Videos**
 
 | Mode | Route | Purpose |
 |------|-------|---------|
-| **Search** | `/search` | Hybrid semantic search; clip cards with match timeline; Cosmos-Reason2 synthesis |
+| **Search** | `/search` | Hybrid semantic search; clip cards with match timeline; Cosmos-Reason3 synthesis |
 | **Explore** | `/explore` | Browse uploads by day and location; stream chunks, delete, summarize on demand |
 | **Dashboard** | `/dashboard` | VastDB stats, ingest quality, object **instance** heatmap (peak count sums), grounded key events |
 
@@ -16,7 +16,7 @@ Three top-level modes share the same scope pills (**All Videos** / **My Videos**
 
 - Empty state shows **search suggestions** from `GET /api/v1/suggestions` (prompt-suggester grounded rephrases → `vss-events-collection`). Clicking a suggestion fills the search bar only.
 - Clip cards: **upload time** badge (config timezone), **% match** badge, match timeline with segment jumps, reasoning caption and class chips.
-- Search animation phases follow the live request; model names come from `GET /api/v1/config` (Cosmos-Embed1, Cosmos-Reason2).
+- Search animation phases follow the live request; model names come from `GET /api/v1/config` (Cosmos-Embed1, Cosmos-Reason3).
 - After a search, results persist when navigating away and back.
 
 ### Explore

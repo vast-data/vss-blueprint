@@ -62,18 +62,18 @@ class Settings(BaseSettings):
     visual_embedding_local_nim: bool = Field(default=False, description="Use local NIM for visual embeddings")
     hybrid_text_weight: float = Field(default=0.6, ge=0.0, le=1.0, description="Hybrid search weight for text vs visual")
     
-    # Cosmos-Reason2 text synthesis (search / explore summarize — text-only, no video)
-    cosmos_host: str = Field(default="", description="Cosmos-Reason2 host (same as ingest reasoner)")
-    cosmos_port: int = Field(default=8001, description="Cosmos-Reason2 port")
-    cosmoshttpscheme: str = Field(default="http", description="http or https for Cosmos-Reason2")
-    cosmos_authorization: str = Field(default="", description="Optional Bearer token for hosted/routed Cosmos-Reason2 API (sent as Authorization when set)")
-    cosmos_model: str = Field(default="nvidia/cosmos-reason2-8b", description="Cosmos-Reason2 model id")
+    # Cosmos-Reason3 text synthesis (search / explore summarize — text-only, no video)
+    cosmos_host: str = Field(default="", description="Cosmos-Reason3 host (same as ingest reasoner)")
+    cosmos_port: int = Field(default=8001, description="Cosmos-Reason3 port")
+    cosmoshttpscheme: str = Field(default="http", description="http or https for Cosmos-Reason3")
+    cosmos_authorization: str = Field(default="", description="Optional Bearer token for hosted/routed Cosmos-Reason3 API (sent as Authorization when set)")
+    cosmos_model: str = Field(default="nvidia/cosmos3-nano-reasoner", description="Cosmos-Reason3 model id")
     cosmos_temperature: float = Field(default=0.2, description="Sampling temperature for synthesis")
     synthesis_max_tokens: int = Field(default=2000, description="Max tokens per synthesis completion chunk")
     synthesis_timeout_seconds: int = Field(default=120, description="Cosmos synthesis API timeout in seconds")
     synthesis_max_continuations: int = Field(default=4, description="Extra continuation chunks when response hits token limit")
 
-    # Legacy Llama/NIM settings (unused; synthesis uses Cosmos-Reason2 above)
+    # Legacy Llama/NIM settings (unused; synthesis uses Cosmos-Reason3 above)
     llm_model_name: str = Field(default="meta/llama-3.1-8b-instruct", description="Deprecated")
     llm_host: str = Field(default="integrate.api.nvidia.com", description="Deprecated")
     llm_port: int = Field(default=443, description="Deprecated")
@@ -133,7 +133,7 @@ def load_settings_from_yaml(yaml_path: str) -> dict:
 
 
 def cosmos_synthesis_url(settings: Settings) -> str:
-    """OpenAI-compatible chat completions URL for Cosmos-Reason2 text synthesis.
+    """OpenAI-compatible chat completions URL for Cosmos-Reason3 text synthesis.
 
     Supports host with a path prefix (e.g. gateway/tenant/model) and omits the port
     when it matches the scheme default (443 https / 80 http)."""
