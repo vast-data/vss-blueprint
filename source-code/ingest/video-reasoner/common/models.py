@@ -11,7 +11,7 @@ class Settings(BaseModel):
     s3secretkey: str
     s3endpoint: str
     
-    # Cosmos-Reason2 (hosted vLLM OpenAI API — base64-encoded segment MP4)
+    # Cosmos-Reason3 (hosted vLLM OpenAI API — base64-encoded segment MP4)
     cosmos_host: str = ""
     cosmos_port: int = 8001
     cosmoshttpscheme: str = "http"
@@ -62,7 +62,7 @@ class Settings(BaseModel):
 
 
 class VideoReasoningResult(BaseModel):
-    """Result from Cosmos-Reason2 video analysis"""
+    """Result from Cosmos-Reason3 video analysis"""
     source: str
     filename: str
     reasoning_content: str

@@ -45,7 +45,7 @@ jwt_secret: "<openssl rand -hex 32>"
 |---------|-------------------|------------------------|
 | `embedding_local_nim` | No API key sent | Sends `nvidia_api_key` |
 
-Search / explore **synthesis** uses **Cosmos-Reason2** (`cosmos_host`, `cosmos_port`, `cosmoshttpscheme`) — text-only over indexed evidence. **Cosmos-Embed1** is still required for hybrid vector search.
+Search / explore **synthesis** uses **Cosmos-Reason3** (`cosmos_host`, `cosmos_port`, `cosmoshttpscheme`) — text-only over indexed evidence. **Cosmos-Embed1** is still required for hybrid vector search.
 
 ---
 
@@ -56,7 +56,7 @@ Search / explore **synthesis** uses **Cosmos-Reason2** (`cosmos_host`, `cosmos_p
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Max Clip Cards | Grouped upload cards (`top_k`) | 15 |
-| Clips for synthesis | Clip cards sent to Cosmos-Reason2 | 3 |
+| Clips for synthesis | Clip cards sent to Cosmos-Reason3 | 3 |
 | Caption vs Video Weight | Hybrid blend (`hybrid_text_weight`) | 0.6 |
 | Minimum Similarity | Score threshold | 0.1 |
 
@@ -139,7 +139,7 @@ Uploads record the uploader in `allowed_users`. Streaming captures do not record
 |----------|-------------|
 | `GET /api/v1/videos/explore` | Browse parent videos by upload date and **location** (`scope`, `date`, `location`, `indexed`, `limit`, `offset`) |
 | `GET /api/v1/videos/chunk` | One stream chunk for Previous/Next (`stream_id`, `chunk_index` 0-based, `scope`) |
-| `POST /api/v1/videos/synthesize` | On-demand Cosmos-Reason2 summary over all segments for one `original_video` |
+| `POST /api/v1/videos/synthesize` | On-demand Cosmos-Reason3 summary over all segments for one `original_video` |
 | `DELETE /api/v1/videos` | Delete one parent video (`original_video`) |
 
 `indexed=complete` (default) lists parents whose segment rows cover every slot `1..total_segments`. `indexed=partial` lists parents that have some rows and are still missing slots. Response field `indexed` echoes the filter. Other fields: `uploads_by_day`, `locations[]`, `selected_location`, and `table_available` / `table_message` when VastDB is empty or unreadable.

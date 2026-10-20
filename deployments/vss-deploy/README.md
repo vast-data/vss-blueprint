@@ -21,6 +21,7 @@ These must already be true before `./deploy.sh`. `--check` probes them and does 
 - Python 3.10 or newer. `./deploy.sh` creates `deploy-work/venv` and installs PyYAML there.
 - `kubectl`, with `KUBECONFIG` set or `site.kubeconfig` filled. The shell value wins.
 - `vastde` v5.5.0-sp2 on `PATH`, already logged in as `vms.user` against `vms.host` for tenant `vms.tenant`. The tenant, username, and VMS host in `vastde config view` must match `site.yaml`. This deploy path is aligned with DataEngine 5.5.0-sp2. Install and builder selection: [Get vastde and roll function images](#get-vastde-and-roll-function-images).
+- `vastde` is only for Data Engine: the compute cluster, the container registry, triggers, functions, and pipelines. Views, topics, users, groups, and VastDB schemas and tables go through the VMS API.
 
 ### Kubernetes and DataEngine
 
@@ -47,7 +48,7 @@ Image names in `site.yaml` must be the names you pushed. See [scripts](../../sou
 
 ### Models and connectivity
 
-Cosmos-Reason2, Cosmos-Embed1, and YOLO11 must be running. GPU host install: [vss-blueprint-models](../../scripts/vss-blueprint-models/README.md).
+Cosmos-Reason3, Cosmos-Embed1, and YOLO11 must be running. GPU host install: [vss-blueprint-models](../../scripts/vss-blueprint-models/README.md).
 
 VIP pools are probed from `k8s.host`, not from the machine running the script. That host needs SSH as `k8s.user`, and from there:
 
@@ -56,7 +57,7 @@ VIP pools are probed from `k8s.host`, not from the machine running the script. T
 | S3 | `storage.s3_endpoint` returns any HTTP response |
 | Ingest VastDB | `storage.ingest_vdb_endpoint` returns any HTTP response |
 | Backend VastDB | `storage.backend_vdb_endpoint` returns any HTTP response |
-| Cosmos-Reason2 | `GET http://<cosmos host>:<port>/v1/models` returns 200 |
+| Cosmos-Reason3 | `GET http://<cosmos host>:<port>/v1/models` returns 200 |
 | Cosmos-Embed1 | `GET http://<embed host>:<port>/v1/models` returns 200 |
 | YOLO11 | `GET http://<yolo host>:<port>/healthz` returns 200 |
 
@@ -175,7 +176,7 @@ In the pipeline builder, set every function to the revision just published and d
 
 `--check` and `--cleanup` are not combined. A validator failure does not deploy and does not clean up.
 
-Cleanup empties the chunks and segments buckets from `k8s.host`, which can reach the S3 VIP, using `deploy-work/storage-keys.yaml`. It then deletes every VastDB table and schema in the database bucket through VMS, and only then deletes that view. Keep the keys file until cleanup finishes.
+Cleanup stops the functions first. It deletes every VastDB table and schema in the database bucket through VMS, empties the chunks and segments buckets from `k8s.host` (that host can reach the S3 VIP) using `deploy-work/storage-keys.yaml`, and then deletes the views. A bucket that is still not empty is emptied again before the view delete is retried. Keep the keys file until cleanup finishes.
 
 ## What the script creates
 

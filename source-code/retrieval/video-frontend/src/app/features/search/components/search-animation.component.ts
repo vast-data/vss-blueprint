@@ -330,7 +330,7 @@ import { MatIconModule } from '@angular/material/icon';
 })
 export class SearchAnimationComponent {
   @Input() embeddingModelDetail: string = 'nvidia/cosmos-embed1 (256 dims)';
-  @Input() synthesisModel: string = 'nvidia/cosmos-reason2-8b';
+  @Input() synthesisModel: string = 'nvidia/cosmos3-nano-reasoner';
   @Input() phase: 'idle' | 'embedding' | 'searching' | 'filtering' | 'synthesizing' | 'complete' = 'idle';
   @Input() embeddingTime: number = 0;
   @Input() searchTime: number = 0;

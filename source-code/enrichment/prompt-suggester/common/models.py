@@ -36,7 +36,7 @@ class Settings(BaseModel):
 
     @property
     def cosmos_url(self) -> str:
-        """Cosmos-Reason2 chat URL. Supports host with a path prefix
+        """Cosmos-Reason3 chat URL. Supports host with a path prefix
         (e.g. gateway/tenant/slot) and omits the port when it matches the
         scheme default (443 https / 80 http)."""
         scheme = (self.cosmoshttpscheme or "http").rstrip(":/")

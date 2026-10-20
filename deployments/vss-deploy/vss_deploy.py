@@ -427,39 +427,7 @@ def validate(site: dict) -> tuple[list[Check], dict]:
         except Exception as exc:
             checks.append(Check("FAIL", "container registry", str(exc)[:200]))
 
-    step("buckets and topics")
-    code, out = run(["vastde", "buckets", "list", "-o", "json"], timeout=40)
-    buckets = []
-    if code != 0:
-        checks.append(Check("FAIL", "buckets list", redact(out)[:200]))
-    else:
-        try:
-            buckets = rows_of(json_from_cli(out))
-        except Exception as exc:
-            checks.append(Check("FAIL", "buckets list", str(exc)[:200]))
-    broker = str(need(site, "dataengine", "broker") or "")
-    broker_row = next((b for b in buckets if broker in (b.get("bucket"), b.get("s3_bucket_name"), b.get("name"))), None)
-    protocols = [str(p).upper() for p in (broker_row or {}).get("protocols") or []]
-    checks.append(Check(
-        "PASS" if broker_row and "KAFKA" in protocols else "FAIL",
-        "broker",
-        f"{broker} protocols={protocols or '<missing>'}",
-    ))
-
-    planned = [
-        need(site, "storage", "buckets", "chunks"),
-        need(site, "storage", "buckets", "segments"),
-        need(site, "storage", "buckets", "database"),
-    ]
-    existing_names = {b.get("bucket") or b.get("s3_bucket_name") for b in buckets}
-    for name in planned:
-        if not name:
-            checks.append(Check("FAIL", "bucket name", "missing in site.yaml"))
-        elif name in existing_names:
-            checks.append(Check("PASS", f"bucket {name}", "already exists"))
-        else:
-            checks.append(Check("PASS", f"bucket {name}", "will be created"))
-
+    step("storage names and triggers")
     chunks_name = str(need(site, "storage", "buckets", "chunks") or "")
     segments_name = str(need(site, "storage", "buckets", "segments") or "")
     suffix = str(need(site, "storage", "output_bucket_suffix") or "-segments")
@@ -483,21 +451,6 @@ def validate(site: dict) -> tuple[list[Check], dict]:
             "nvidia api key",
             "required when embed.local_nim is false",
         ))
-
-    code, out = run(["vastde", "topics", "list", "--database-name", broker, "-o", "json"], timeout=40)
-    topic = str(need(site, "dataengine", "topic") or "")
-    topic_names = []
-    if code != 0:
-        checks.append(Check("FAIL", "topics list", redact(out)[:200]))
-    else:
-        try:
-            topic_names = [t.get("name") for t in rows_of(json_from_cli(out))]
-        except Exception as exc:
-            checks.append(Check("FAIL", "topics list", str(exc)[:200]))
-        if topic in topic_names:
-            checks.append(Check("PASS", f"topic {topic}", "already exists"))
-        elif topic:
-            checks.append(Check("PASS", f"topic {topic}", "will be created"))
 
     code, out = run(["vastde", "triggers", "list", "-o", "json"], timeout=40)
     trigger_rows = []
@@ -633,6 +586,8 @@ def validate(site: dict) -> tuple[list[Check], dict]:
         else:
             detail = f"will be created in {group_name}"
         checks.append(Check("PASS", f"user {site['storage']['user']}", detail))
+        check_storage_views(checks, vms, tenant_id, site)
+        check_topic(checks, vms, site)
     except Exception as exc:
         checks.append(Check("FAIL", "VMS login", redact(str(exc))[:200]))
 
@@ -745,7 +700,7 @@ def deploy_storage(ctx: dict) -> dict:
 
     topic = site["dataengine"]["topic"]
     broker = site["dataengine"]["broker"]
-    if topic in topic_names(broker):
+    if topic in topic_names(vms, broker):
         say(f"topic {topic} exists", "32")
     else:
         say(f"create topic {topic} on {broker}", "1;36")
@@ -765,18 +720,76 @@ def views_by_bucket(vms: Vms, tenant_id) -> dict:
     return {row.get("bucket"): row for row in rows_of(listed)}
 
 
-def topic_names(broker: str) -> set[str]:
-    code, out = run(["vastde", "topics", "list", "--database-name", broker, "-o", "json"], timeout=60)
-    if code != 0:
-        return set()
-    try:
-        return {row.get("name") for row in rows_of(json_from_cli(out)) if row.get("name")}
-    except Exception:
-        return set()
+def check_storage_views(checks: list, vms: Vms, tenant_id, site: dict) -> None:
+    """Broker and bucket existence come from VMS views.
+
+    `vastde buckets list` unmarshals provisioned_capacity as int32 and fails the
+    whole list when any view is larger than about 2 GiB.
+    """
+    broker = str(need(site, "dataengine", "broker") or "")
+    planned = [
+        need(site, "storage", "buckets", "chunks"),
+        need(site, "storage", "buckets", "segments"),
+        need(site, "storage", "buckets", "database"),
+    ]
+    if not tenant_id:
+        checks.append(Check("FAIL", "broker", f"{broker} views not listed"))
+        for name in planned:
+            checks.append(Check("FAIL", f"bucket {name or '<missing>'}", "views not listed"))
+        return
+    code, listed = vms.call("GET", f"/views/?tenant_id={tenant_id}")
+    if code != 200:
+        checks.append(Check("FAIL", "views", f"HTTP {code} {redact(str(listed))[:200]}"))
+        return
+    views = {row.get("bucket"): row for row in rows_of(listed) if row.get("bucket")}
+    row = views.get(broker)
+    protocols = [str(p).upper() for p in ((row or {}).get("protocols") or [])]
+    checks.append(Check(
+        "PASS" if row and "KAFKA" in protocols else "FAIL",
+        "broker",
+        f"{broker} protocols={protocols or '<missing>'}",
+    ))
+    for name in planned:
+        if not name:
+            checks.append(Check("FAIL", "bucket name", "missing in site.yaml"))
+        elif name in views:
+            checks.append(Check("PASS", f"bucket {name}", "already exists"))
+        else:
+            checks.append(Check("PASS", f"bucket {name}", "will be created"))
+
+
+def check_topic(checks: list, vms: Vms, site: dict) -> None:
+    broker = str(need(site, "dataengine", "broker") or "")
+    topic = str(need(site, "dataengine", "topic") or "")
+    code, data = vms.call("GET", f"/topics/?database_name={broker}")
+    if code != 200:
+        checks.append(Check("FAIL", f"topic {topic or '<missing>'}", f"HTTP {code} {redact(str(data))[:200]}"))
+        return
+    names = {
+        row.get("name")
+        for row in rows_of(data)
+        if row.get("name") and row.get("database_name") in (None, broker)
+    }
+    if not topic:
+        checks.append(Check("FAIL", "topic name", "missing in site.yaml"))
+    elif topic in names:
+        checks.append(Check("PASS", f"topic {topic}", "already exists"))
+    else:
+        checks.append(Check("PASS", f"topic {topic}", "will be created"))
+
+
+def topic_names(vms: Vms, broker: str) -> set[str]:
+    code, data = vms.call("GET", f"/topics/?database_name={broker}")
+    vms_expect(code, data, "list topics", ok=(200,))
+    return {
+        row.get("name")
+        for row in rows_of(data)
+        if row.get("name") and row.get("database_name") in (None, broker)
+    }
 
 
 def cli_names(kind: str, *, required: bool = False) -> set[str]:
-    """One list per kind. Deploy asks once before its create loop; cleanup asks once before deletes."""
+    """One Data Engine list per kind: triggers, functions, or pipelines."""
     code, out = run(["vastde", kind, "list", "-o", "json"], timeout=60)
     if code != 0:
         message = redact(out)[:300]
@@ -1267,10 +1280,11 @@ if os.environ.get("S3_BUCKETS"):
 """
 
 
-def empty_video_buckets(site: dict) -> None:
-    """Delete every object in the chunks and segments buckets from the k8s host."""
-    buckets = (site.get("storage") or {}).get("buckets") or {}
-    names = [str(buckets.get(key) or "") for key in ("chunks", "segments")]
+def empty_video_buckets(site: dict, names: list[str] | None = None) -> None:
+    """Delete every object in the named buckets from the k8s host."""
+    if names is None:
+        buckets = (site.get("storage") or {}).get("buckets") or {}
+        names = [str(buckets.get(key) or "") for key in ("chunks", "segments")]
     names = [name for name in names if name]
     if not names:
         return
@@ -1337,7 +1351,7 @@ def delete_kubernetes(site: dict) -> None:
 
 
 def delete_topic(vms: Vms, broker: str, topic: str) -> None:
-    if topic not in topic_names(broker):
+    if topic not in topic_names(vms, broker):
         say(f"topic {topic} absent", "32")
         return
     say(f"delete topic {topic}", "1;33")
@@ -1417,12 +1431,23 @@ def tenant_views(vms: Vms, site: dict) -> dict | None:
     return views_by_bucket(vms, rows[0].get("id"))
 
 
+def bucket_not_empty(code: int, data) -> bool:
+    return code == 409 and "not empty" in str(data).lower()
+
+
 def delete_buckets(vms: Vms, site: dict, views: dict) -> None:
-    """Drop VastDB schemas while the database view still exists, then delete every view."""
+    """Drop VastDB schemas, empty leftover objects, then delete every view."""
     buckets = (site.get("storage") or {}).get("buckets") or {}
     database = buckets.get("database")
     if database and database in views:
         drop_database(vms, site)
+    video = [
+        buckets[key]
+        for key in ("chunks", "segments")
+        if buckets.get(key) and buckets[key] in views
+    ]
+    if video:
+        empty_video_buckets(site, video)
     for bucket in buckets.values():
         row = views.get(bucket)
         if not row:
@@ -1430,6 +1455,9 @@ def delete_buckets(vms: Vms, site: dict, views: dict) -> None:
             continue
         say(f"delete bucket {bucket}", "1;33")
         code, data = vms.call("DELETE", f"/views/{row['id']}/")
+        if bucket_not_empty(code, data):
+            empty_video_buckets(site, [bucket])
+            code, data = vms.call("DELETE", f"/views/{row['id']}/")
         vms_expect(code, data, f"delete bucket {bucket}")
 
 
@@ -1459,20 +1487,13 @@ def remove_work_files() -> None:
 def cleanup_site(site: dict) -> None:
     """Remove the objects this site file owns. The namespace stays; it is attached to DataEngine.
 
-    Order matters: stop writers, empty the video buckets, drop VastDB tables and schemas,
-    then delete the views. A database view that still has a schema cannot be deleted.
+    Order matters: stop writers, drop VastDB tables and schemas, empty the video
+    buckets, then delete the views. A view that still has objects or a schema cannot
+    be deleted.
     """
     delete_kubernetes(site)
     vms = Vms(site["vms"]["host"], site["vms"]["tenant"], site["vms"]["user"], site["vms"]["password"])
     views = tenant_views(vms, site)
-    buckets = (site.get("storage") or {}).get("buckets") or {}
-    video_left = views is not None and any(
-        buckets.get(key) and buckets[key] in views for key in ("chunks", "segments")
-    )
-    if video_left:
-        empty_video_buckets(site)
-    elif views is not None:
-        say("buckets chunks and segments absent", "32")
     de = site["dataengine"]
     pipeline = site.get("pipeline") or {}
     delete_named("pipelines", [de["pipeline"]], timeout=300)

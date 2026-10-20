@@ -22,7 +22,7 @@ Use this directory only when the storage user, buckets, topic, and pipeline alre
 
 - **AI/ML services:**
   - Cosmos-Embed1 NIM (hybrid search embeddings)
-  - Cosmos-Reason2 NIM (search/explore synthesis; same host as ingest reasoner)
+  - Cosmos-Reason3 NIM (search/explore synthesis; same host as ingest reasoner)
   - YOLO11 infer service (ingest `video-detector`)
   - Optional NVIDIA Cloud API key when `embedding_local_nim: false`
   - GPU host deploy: [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md)
@@ -46,7 +46,7 @@ vim backend-secret.yaml
 | **VastDB** | `vdb_endpoint`, `vdb_bucket` (`vss-vastdb-bucket`), `vdb_schema` (`vss-schema`), `vdb_collection` (`vss-collection`), `vdb_prompts_collection` (`vss-events-collection`), credentials |
 | **S3** | `s3_endpoint` (must match tenant), `s3_upload_bucket` (`vss-chunks`), `s3_segments_bucket` (`vss-chunks-segments`), credentials |
 | **Cosmos-Embed1** | `embedding_host`, `embedding_port`, `embedding_model`, `embedding_local_nim`, `nvidia_api_key` |
-| **Cosmos-Reason2** | `cosmos_host`, `cosmos_port`, `cosmoshttpscheme`, `cosmos_model`, `synthesis_*` |
+| **Cosmos-Reason3** | `cosmos_host`, `cosmos_port`, `cosmoshttpscheme`, `cosmos_model`, `synthesis_*` |
 | **UI** | `display_timezone` (IANA, e.g. `Asia/Jerusalem`) |
 | **Auth** | `vast_host`, `tenant_name`, `jwt_secret` (see [setup](../../../source-code/retrieval/video-backend/README.md#user-authentication)) |
 

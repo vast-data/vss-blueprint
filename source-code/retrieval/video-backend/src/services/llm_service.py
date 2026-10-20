@@ -1,5 +1,5 @@
 """
-Text synthesis for search / explore using Cosmos-Reason2 (text-only chat; no video).
+Text synthesis for search / explore using Cosmos-Reason3 (text-only chat; no video).
 """
 import httpx
 import logging
@@ -38,13 +38,13 @@ Rules:
 
 
 class LLMService:
-    """Cosmos-Reason2 text synthesis over indexed segment evidence."""
+    """Cosmos-Reason3 text synthesis over indexed segment evidence."""
 
     def __init__(self):
         self.settings = get_settings()
         if not (self.settings.cosmos_host or "").strip():
             raise ValueError(
-                "cosmos_host is not configured — set Cosmos-Reason2 host in backend secret "
+                "cosmos_host is not configured — set Cosmos-Reason3 host in backend secret "
                 "(same host/port as ingest video-reasoner)."
             )
         self.cosmos_url = cosmos_synthesis_url(self.settings)
@@ -56,7 +56,7 @@ class LLMService:
         self.temperature = self.settings.cosmos_temperature
         self.default_prompt = DEFAULT_SYSTEM_PROMPT
         logger.info(
-            "[SYNTHESIS] Cosmos-Reason2 %s @ %s (max_tokens=%s, timeout=%ss)",
+            "[SYNTHESIS] Cosmos-Reason3 %s @ %s (max_tokens=%s, timeout=%ss)",
             self.model_name,
             self.cosmos_url,
             self.max_tokens,
@@ -303,7 +303,7 @@ Use Clip N labels from the headers above; do not list filenames."""
         return f"{header}\n" + "\n".join(body_parts)
     
     def _call_cosmos_chat(self, user_message: str, system_prompt: Optional[str] = None) -> Dict:
-        """Text-only Cosmos-Reason2 chat/completions (same API as ingest, no video payload)."""
+        """Text-only Cosmos-Reason3 chat/completions (same API as ingest, no video payload)."""
         effective_system_prompt = system_prompt if system_prompt else self.default_prompt
 
         headers = {"Content-Type": "application/json"}

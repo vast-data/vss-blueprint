@@ -21,7 +21,7 @@ The [site deploy](../README.md) does not attach a Data Engine identity policy. T
 - User with permissions to setup DataEngine Pipelines
 - Pre-created Topic in VAST Event Broker (e.g., `video-topic`)
 - A container registry added to your DataEngine tenant in VMS, with images you built and pushed (jump to **Build DataEngine function images** later in this file)
-- GPU services (Reason2, Embed1, YOLO) reachable from DataEngine workers — see [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md)
+- GPU services (Reason3, Embed1, YOLO) reachable from DataEngine workers — see [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md)
 
 ## Pipeline Overview
 
@@ -67,7 +67,7 @@ Secret **name** in DataEngine must be `vss2-secret`. Bucket/table **values** use
 | Section | Key Settings |
 |---------|--------------|
 | **S3** | `s3accesskey`, `s3secretkey`, `s3endpoint` |
-| **Reasoning** | Cosmos-Reason2 (`cosmos_host`, `cosmos_port: 8001`, `cosmos_model: nvidia/cosmos-reason2-8b`) |
+| **Reasoning** | Cosmos-Reason3 (`cosmos_host`, `cosmos_port: 8001`, `cosmos_model: nvidia/cosmos3-nano-reasoner`) |
 | **Embedding** | Text + visual NIM (`embeddinghost` / `embeddingport: 8002`, `embeddingmodel: nvidia/cosmos-embed1`); recreate VastDB collection after schema changes |
 | **VastDB** | `vdbendpoint`, `vdbaccesskey`, `vdbsecretkey`, `vdbbucket`, `vdbschema`, `vdbcollection` |
 | **YOLO** | `yolo_infer_host`, `yolo_infer_port` (`8003` with [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md); templates may still show `8022`), `detection_sidecar_prefix` |
@@ -139,7 +139,7 @@ vim vss-cli-secret-file-template.yaml
 | Section | Key Settings |
 |---------|--------------|
 | **S3** | `s3accesskey`, `s3secretkey`, `s3endpoint` |
-| **Reasoning** | Cosmos-Reason2 (`cosmos_host`, `cosmos_port: 8001`, `cosmos_model: nvidia/cosmos-reason2-8b`) |
+| **Reasoning** | Cosmos-Reason3 (`cosmos_host`, `cosmos_port: 8001`, `cosmos_model: nvidia/cosmos3-nano-reasoner`) |
 | **Embedding** | Text + visual NIM (`embeddinghost` / `embeddingport: 8002`, `embeddingmodel: nvidia/cosmos-embed1`); recreate VastDB collection after schema changes |
 | **VastDB** | `vdbendpoint`, `vdbaccesskey`, `vdbsecretkey`, `vdbbucket`, `vdbschema`, `vdbcollection` |
 | **YOLO** | `yolo_infer_host`, `yolo_infer_port` (`8003` with [vss-blueprint-models](../../../scripts/vss-blueprint-models/README.md); templates may still show `8022`), `detection_sidecar_prefix` |
@@ -259,7 +259,7 @@ vastde pipelines create \
 |----------|-------------|---------|
 | video-segmenter | Splits videos into segments | [README](../../../source-code/ingest/video-segmenter/README.md) |
 | video-detector | YOLO11 object detection + sidecar | [README](../../../source-code/ingest/video-detector/README.md) |
-| video-reasoner | AI video analysis (Cosmos-Reason2) | [README](../../../source-code/ingest/video-reasoner/README.md) |
+| video-reasoner | AI video analysis (Cosmos-Reason3) | [README](../../../source-code/ingest/video-reasoner/README.md) |
 | video-embedder | Vector embeddings | [README](../../../source-code/ingest/video-embedder/README.md) |
 | video-vastdb-writer | Stores vectors in VastDB | [README](../../../source-code/ingest/vastdb-writer/README.md) |
 | prompt-suggester | Scheduled enrichment → search chips + key events | [README](../../../source-code/enrichment/prompt-suggester/README.md) |

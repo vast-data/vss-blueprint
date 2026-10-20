@@ -29,7 +29,7 @@ def init(ctx):
         
         ctx.reasoning_client = CosmosReasoningClient(settings)
         ctx.logger.info(
-            f"[INIT] Cosmos-Reason2: {settings.cosmos_model} @ {settings.cosmos_url}"
+            f"[INIT] Cosmos-Reason3: {settings.cosmos_model} @ {settings.cosmos_url}"
         )
         ctx.segment_index = SegmentIndexChecker(settings) if _has_vdb_config(settings) else None
         

@@ -87,7 +87,7 @@ class S3Client:
 
 
 class CosmosReasoningClient:
-    """Cosmos reasoning client for video analysis using hosted Reason2 API"""
+    """Cosmos reasoning client for video analysis using hosted Cosmos-Reason3 API"""
 
     def __init__(self, settings):
         """Initialize Cosmos reasoning client"""
