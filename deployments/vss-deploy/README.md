@@ -28,14 +28,14 @@ These must already be true before `./deploy.sh`. `--check` probes them and does 
 - Namespace `site.namespace` exists and is `Active`.
 - That namespace is attached to the DataEngine cluster named `dataengine.cluster`.
 - `dataengine.registry` exists in VMS and is linked to that cluster.
-- Every image in `site.yaml` is already in that registry. An empty function `tag` means `latest`.
+- Every image in `site.yaml` is already in that registry. An empty function `tag`, and a Kubernetes image with no tag, means `latest`.
 
 Build and push before the deploy:
 
 ```bash
 # from the repo root
-REGISTRY=your.registry/vss TAG=v1 source-code/scripts/build-retrieval-images.sh
-REGISTRY=<registry-host>/<path> TAG=<image-tag> source-code/scripts/build-vastde-functions.sh
+REGISTRY=your.registry/org source-code/scripts/build-retrieval-images.sh
+REGISTRY=<registry-host>/<path> source-code/scripts/build-vastde-functions.sh
 ```
 
 Image names in `site.yaml` must be the names you pushed. See [scripts](../../source-code/scripts/README.md).

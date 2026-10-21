@@ -54,11 +54,11 @@ images:
     vss-embedder:   { artifact: "dev/solutions/vss2-embedder", tag: }
     vss-vastdb:     { artifact: "dev/solutions/vss2-vastdb", tag: }
     vss-suggester:  { artifact: "dev/solutions/vss2-events", tag: }
-  kubernetes:
-    backend:                         # registry/org/vss2-backend:tag
-    frontend:
-    streaming:
-    batch_sync:
+  kubernetes:                        # no tag means latest
+    backend:                         # <registry>/<path>/vss2-backend
+    frontend:                        # <registry>/<path>/vss2-frontend
+    streaming:                       # <registry>/<path>/vss2-streaming
+    batch_sync:                      # <registry>/<path>/vss2-batch
 
 runtime:
   cosmos:

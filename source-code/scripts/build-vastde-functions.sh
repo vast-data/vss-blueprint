@@ -6,11 +6,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ -z "${REGISTRY:-}" ]]; then
-  echo "error: set REGISTRY to your registry prefix (e.g. REGISTRY=your.registry/vss)" >&2
-  echo "  example: REGISTRY=your.registry/vss TAG=v1 $0" >&2
+  echo "error: set REGISTRY to your registry prefix (e.g. REGISTRY=your.registry/org)" >&2
+  echo "  example: REGISTRY=your.registry/org $0" >&2
   exit 1
 fi
-TAG="${TAG:-v1}"
+TAG="${TAG:-latest}"
 
 build_and_push() {
   local dir="$1"

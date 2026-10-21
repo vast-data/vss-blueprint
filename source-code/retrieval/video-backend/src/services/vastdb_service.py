@@ -8,7 +8,6 @@ import pyarrow as pa
 import pandas as pd
 import time
 import os
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
@@ -123,15 +122,8 @@ class VastDBService:
                     logger.info(f"Found VastDB ADBC driver at {driver_path}")
                     break
             
-            # If not found, try to download from artifactory (fallback)
             if not driver_path:
-                driver_path = "/tmp/libadbc_driver_vastdb.so"
-                driver_url = "https://artifactory.vastdata.com/files/vastdb-native-client/1955131/libadbc_driver_vastdb.so"
-                logger.warning(f"Driver not found in image, downloading from {driver_url}")
-                urllib.request.urlretrieve(driver_url, driver_path)
-                # Make executable
-                os.chmod(driver_path, 0o755)
-                logger.info(f"VastDB ADBC driver downloaded to {driver_path}")
+                raise RuntimeError("VastDB ADBC driver not found at /opt/adbc-driver or /tmp")
             
             # Store connection parameters for ADBC
             self._adbc_connection = {

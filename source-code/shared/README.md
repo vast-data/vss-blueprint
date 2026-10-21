@@ -50,13 +50,13 @@ Manual builds:
 ```bash
 cd source-code
 
-docker buildx build -f retrieval/video-backend/Dockerfile -t your.registry/vss-video-backend:v2 --push .
+docker buildx build -f retrieval/video-backend/Dockerfile -t your.registry/org/vss2-backend:latest --push .
 
-docker buildx build -f retrieval/video-frontend/Dockerfile -t your.registry/vss-video-frontend:v2 --push retrieval/video-frontend
+docker buildx build -f retrieval/video-frontend/Dockerfile -t your.registry/org/vss2-frontend:latest --push retrieval/video-frontend
 
-docker buildx build -f video-streaming/Dockerfile -t your.registry/vss-video-streaming:v2 --push .
+docker buildx build -f video-streaming/Dockerfile -t your.registry/org/vss2-streaming:latest --push .
 
-docker buildx build -f video-batch-sync/Dockerfile -t your.registry/vss-video-batch-sync:v2 --push .
+docker buildx build -f video-batch-sync/Dockerfile -t your.registry/org/vss2-batch:latest --push .
 ```
 
 Frontend still uses `retrieval/video-frontend/` as context (no shared Python module).

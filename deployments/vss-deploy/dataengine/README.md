@@ -178,35 +178,35 @@ vastde functions create \
   --container-registry dockerio \
   --artifact-source YOUR_ORG/vss2-segmenter \
   --artifact-type image \
-  --image-tag v1
+  --image-tag latest
 
 vastde functions create \
   --name video-detector \
   --container-registry dockerio \
   --artifact-source YOUR_ORG/vss2-detector \
   --artifact-type image \
-  --image-tag v1
+  --image-tag latest
 
 vastde functions create \
   --name video-reasoner \
   --container-registry dockerio \
   --artifact-source YOUR_ORG/vss2-reasoner \
   --artifact-type image \
-  --image-tag v1
+  --image-tag latest
 
 vastde functions create \
   --name video-embedder \
   --container-registry dockerio \
   --artifact-source YOUR_ORG/vss2-embedder \
   --artifact-type image \
-  --image-tag v1
+  --image-tag latest
 
 vastde functions create \
   --name video-vastdb-writer \
   --container-registry dockerio \
   --artifact-source YOUR_ORG/vss2-vastdb \
   --artifact-type image \
-  --image-tag v1
+  --image-tag latest
 ```
 
 ## Step 4: Configure Pipeline Manifest
@@ -238,7 +238,7 @@ vastde functions create \
   --container-registry dockerio \
   --artifact-source YOUR_ORG/vss2-events \
   --artifact-type image \
-  --image-tag v1
+  --image-tag latest
 ```
 
 Edit `vss-enrichment-pipeline-file.yaml` (`kubernetes_cluster_vrn`, `namespace`, `topic`), then:

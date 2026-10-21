@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: video-batch-sync
-        image: your.registry/vss-video-batch-sync:v1
+        image: your.registry/org/vss2-batch:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 5000

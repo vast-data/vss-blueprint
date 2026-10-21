@@ -33,10 +33,10 @@ Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide
 
 1. **GPU models** (Reason3, Embed1, YOLO on a GPU host): [vss-blueprint-models](scripts/vss-blueprint-models/README.md)
 
-2. **Build and push images** (`REGISTRY` is required; `TAG` defaults to `v1`):
+2. **Build and push images** (`REGISTRY` is required; `TAG` defaults to `latest`, the same as an empty tag in `site.yaml`):
    ```bash
-   REGISTRY=your.registry/vss source-code/scripts/build-retrieval-images.sh
-   REGISTRY=your.registry/vss source-code/scripts/build-vastde-functions.sh
+   REGISTRY=your.registry/org source-code/scripts/build-retrieval-images.sh
+   REGISTRY=your.registry/org source-code/scripts/build-vastde-functions.sh
    ```
    Details: [scripts](source-code/scripts/README.md)
 

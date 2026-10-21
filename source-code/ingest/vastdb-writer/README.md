@@ -13,7 +13,7 @@ A VAST DataEngine serverless function that stores video embeddings and metadata 
 
 ## Easy to Adjust
 
-Configure in `ingest/vss-video-ingest-secret-template.yaml`:
+Configure in `deployments/vss-deploy/dataengine/vss-cli-secret-file-template.yaml` (`vss2-secret`):
 
 - **`vdbendpoint`**: VastDB endpoint URL (from QueryEngine VIP pool)
 - **`vdbbucket`**: Database bucket name (e.g., `processed-videos-db`)
