@@ -80,8 +80,7 @@ export class LoginComponent implements OnInit {
     if (token) {
       console.log('[AUTO-LOGIN] Setting auth state via AuthService...');
       
-      // Update AuthService signal state (not just localStorage!)
-      // This is required because route guards check the signal, not localStorage
+      // Auth signal.
       this.authService.setAutoLoginState(token, username || 'user');
       
       // Cache username for future logins

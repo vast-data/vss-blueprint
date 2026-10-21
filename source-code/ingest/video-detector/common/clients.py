@@ -15,12 +15,12 @@ _CONN_EXC = (
     requests.exceptions.Timeout,
     requests.exceptions.ChunkedEncodingError,
 )
-# 401/403 included: GPU proxy auth blips and intermittent Forbidden must not soft-ack.
+# Statuses raised as TransientError.
 _TRANSIENT_STATUS = (401, 403, 408, 429, 500, 502, 503, 504)
 
 
 class TransientError(Exception):
-    """Retryable failure — hand the retry off to the VastPipeline."""
+    """Error the pipeline retries."""
 
 
 class S3Client:
@@ -104,8 +104,7 @@ class YoloInferClient:
             headers["Authorization"] = (
                 token if token.lower().startswith("bearer ") else f"Bearer {token}"
             )
-        # One in-process retry on connection errors; transient HTTP -> TransientError
-        # so the handler raises and VastPipeline redelivers (no soft-ack).
+        # One connection retry, then TransientError.
         url = f"{self.base_url}/v1/infer"
         try:
             resp = requests.post(url, json=payload, headers=headers, timeout=600)
@@ -120,7 +119,6 @@ class YoloInferClient:
         try:
             resp.raise_for_status()
         except requests.exceptions.HTTPError as exc:
-            # Unexpected 4xx/5xx: prefer redelivery over silent drop.
             raise TransientError(f"HTTP {resp.status_code}: {resp.text[:300]}") from exc
         return resp.json()
 

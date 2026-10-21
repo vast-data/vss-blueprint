@@ -100,8 +100,7 @@ class S3Service:
             file_extension = filename.split('.')[-1] if '.' in filename else 'mp4'
             object_key = f"{user.normalized_username}/{timestamp}_{unique_id}.{file_extension}"
             
-            # Prepare metadata
-            # S3 metadata keys must be lowercase and cannot contain spaces
+            # Lowercase S3 metadata keys.
             metadata = {
                 'owner': user.username,
                 'is-public': str(is_public).lower(),
@@ -113,20 +112,16 @@ class S3Service:
             if tags:
                 metadata['tags'] = ','.join(tags)
             
-            # Add allowed users as comma-separated string (if not public)
             if not is_public and allowed_users:
-                # Always include owner in allowed users
                 all_allowed = [user.username] + [u for u in allowed_users if u != user.username]
                 metadata['allowed-users'] = ','.join(all_allowed)
             elif not is_public:
-                # Private video with only owner
                 metadata['allowed-users'] = user.username
             
             logger.info(f"Generating upload URL for {object_key}")
             logger.debug(f"Metadata: {metadata}")
             
-            # Prepare S3 metadata fields for presigned POST
-            # IMPORTANT: All metadata must be included in Fields for presigned POST
+            # Presigned POST metadata fields.
             s3_fields = {
                 'x-amz-meta-owner': metadata['owner'],
                 'x-amz-meta-is-public': metadata['is-public'],
@@ -419,7 +414,6 @@ class S3Service:
         try:
             logger.info(f"Streaming video from s3://{bucket}/{key}")
             
-            # Get object from S3
             response = self.client.get_object(Bucket=bucket, Key=key)
             
             for chunk in response["Body"].iter_chunks(chunk_size=STREAM_CHUNK_SIZE):

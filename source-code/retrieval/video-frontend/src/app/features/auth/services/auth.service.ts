@@ -46,10 +46,7 @@ export class AuthService {
     });
   }
 
-  /**
-   * Set auth state directly for auto-login (from blueprints page)
-   * This updates the signal state so route guards recognize the authenticated user
-   */
+  /** Auth signal for the current user. */
   setAutoLoginState(token: string, username: string) {
     console.log('[AuthService] Setting auto-login state for user:', username);
     this.state.update((state) => ({
@@ -95,19 +92,14 @@ export class AuthService {
   }
 
   logout(useFullReload: boolean = true) {
-    // Clear auth state
     this.state.update((state) => ({ ...state, status: 'pending', token: null, user: null, error: null }));
     
-    // Clear localStorage
     localStorage.removeItem(SETTINGS.LS_KEY_TOKEN);
     localStorage.removeItem(SETTINGS.USER_KEY_TOKEN);
     
     if (useFullReload) {
-      // Full page reload to clear all application state (search results, cached data, etc.)
-      // This ensures a clean slate for the next user
       window.location.href = '/login';
     }
-    // If useFullReload is false, the caller will handle navigation (e.g., interceptor)
   }
 }
 

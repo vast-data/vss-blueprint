@@ -1130,7 +1130,7 @@ export class SearchBarComponent {
       request.system_prompt = storedPrompt.trim();
     }
 
-    // Custom date range (sent as local time to match VastDB timestamps)
+    // Custom date range, local time.
     if (formValue.timeFilter === 'custom') {
       if (formValue.customStartDate) {
         const startDate = new Date(formValue.customStartDate);
@@ -1286,11 +1286,7 @@ export class SearchBarComponent {
     }
   }
 
-  /**
-   * Format a Date as a local datetime string WITHOUT timezone conversion
-   * Returns format: YYYY-MM-DDTHH:mm:ss (no 'Z' suffix)
-   * This ensures the time matches what's stored in VastDB
-   */
+  /** Local time, YYYY-MM-DDTHH:mm:ss. */
   private formatLocalDateTime(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');

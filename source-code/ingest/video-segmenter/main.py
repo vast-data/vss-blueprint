@@ -16,9 +16,7 @@ from common.handler_utils import (
 )
 from common.clients import S3Client
 
-# One MoviePy/ffmpeg job at a time. A manual upload publishes every chunk at once, and the
-# runtime will run those events together in this process (containerConcurrency 20). Streaming
-# and batch publish the next chunk only after the previous upload, so they already arrive one by one.
+# One segment job at a time.
 _CHUNK_LOCK = threading.Lock()
 
 

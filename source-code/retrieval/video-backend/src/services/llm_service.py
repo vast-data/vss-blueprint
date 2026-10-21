@@ -38,7 +38,7 @@ Rules:
 
 
 class LLMService:
-    """Cosmos-Reason3 text synthesis over indexed segment evidence."""
+    """Cosmos-Reason3 text synthesis."""
 
     def __init__(self):
         self.settings = get_settings()
@@ -69,20 +69,9 @@ class LLMService:
         top_results: List[Dict],
         custom_system_prompt: Optional[str] = None
     ) -> Dict:
-        """
-        Generate AI synthesis from search results
-        
-        Args:
-            query: User's search query
-            top_results: List of search results with summaries (already limited by search API)
-            custom_system_prompt: System prompt from frontend (uses default fallback if not provided)
-            
-        Returns:
-            Dict containing synthesis response and metadata
-        """
+        """Frontend prompt wins. Results are already limited by the search API."""
         start_time = time.time()
         
-        # Use all provided results (limiting is now done by the search API using llm_top_n)
         top_n = len(top_results)
         
         if top_n == 0:
@@ -96,15 +85,10 @@ class LLMService:
                 "error": None
             }
         
-        # Determine which system prompt to use
-        # Priority: prompt from frontend > hardcoded default fallback
         effective_prompt = custom_system_prompt.strip() if custom_system_prompt and custom_system_prompt.strip() else self.default_prompt
         
-        # Prepare summaries for LLM
         summaries_text = self._format_summaries(top_results[:top_n])
         
-        # Construct user message from query + segment summaries only.
-        # Custom system prompt from frontend is the single source of synthesis style/rules.
         user_message = f"""User Query: {query}
 
 Video Clip Evidence (reasoning text from indexed segments):
@@ -114,12 +98,10 @@ Write a concise summary using only this evidence. Follow the markdown sections i
 Use Clip N labels from the headers above; do not list filenames."""
         
         try:
-            # Call NVIDIA API with the effective system prompt
             response_data = self._call_cosmos_chat(user_message, system_prompt=effective_prompt)
             
             processing_time = time.time() - start_time
             
-            # Extract segment names for reference
             segment_names = self._clip_labels(top_results[:top_n])
             
             return {
@@ -303,7 +285,7 @@ Use Clip N labels from the headers above; do not list filenames."""
         return f"{header}\n" + "\n".join(body_parts)
     
     def _call_cosmos_chat(self, user_message: str, system_prompt: Optional[str] = None) -> Dict:
-        """Text-only Cosmos-Reason3 chat/completions (same API as ingest, no video payload)."""
+        """Text-only chat. No video payload."""
         effective_system_prompt = system_prompt if system_prompt else self.default_prompt
 
         headers = {"Content-Type": "application/json"}

@@ -14,7 +14,7 @@ export class IngestMetadataService {
   readonly config = signal<IngestMetadataConfig | null>(null);
   readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
-  /** True when UI is using bundled defaults because the API was unreachable. */
+  /** Bundled metadata config. */
   readonly usingFallback = signal(false);
 
   private loadPromise: Promise<void> | null = null;

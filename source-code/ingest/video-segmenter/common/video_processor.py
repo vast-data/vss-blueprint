@@ -6,17 +6,15 @@ import gc
 from typing import List, Tuple, Callable, Optional
 from moviepy.editor import VideoFileClip
 
-# If the final ceil()-based segment would be shorter than this (seconds), drop it and
-# extend the previous segment to video end (avoids MoviePy/ffmpeg failures on ~1-frame tails).
+# Shortest kept tail, seconds.
 MIN_TAIL_SEGMENT_SEC = 0.5
 CHUNK_TRIM_TOLERANCE_SEC = 0.01
 
 
 class VideoProcessor:
-    """Video processing utilities for segmentation"""
+    """Cut a video into segments."""
     
     def __init__(self, settings):
-        """Initialize video processor with settings"""
         self.settings = settings
         self.segment_duration = settings.segment_duration
         self.output_codec = settings.output_codec
@@ -29,28 +27,16 @@ class VideoProcessor:
         upload_callback: Optional[Callable] = None,
         max_duration_sec: Optional[float] = None,
     ) -> List[Tuple[bytes, int, int, float, float, float]]:
-        """
-        Process video into segments with optional upload callback per segment
-        
-        Args:
-            video_content: Raw video bytes
-            original_filename: Original video filename
-            upload_callback: Optional callback to upload segment after creation
-        
-        Returns:
-            List of tuples: (segment_content, segment_number, total_segments, duration, start_time, end_time)
-        """
+        """Returns (bytes, number, total, duration, start, end) per segment."""
         segments = []
         segments_written = 0
         
-        # Create temporary file for input video
         with tempfile.NamedTemporaryFile(suffix=f".{self.output_format}", delete=False) as temp_input:
             temp_input.write(video_content)
             temp_input.flush()
             temp_input_path = temp_input.name
         
         try:
-            # Probe duration with a short-lived reader (do not reuse one VideoFileClip for all segments).
             logging.info(f"Loading video file: {original_filename}")
             probe = VideoFileClip(temp_input_path)
             probed_duration = probe.duration
@@ -69,7 +55,6 @@ class VideoProcessor:
                     )
 
             total_segments = math.ceil(total_duration / self.segment_duration)
-            # Collapse negligible tail (e.g. 20.01s with 5s steps → avoid a 0.01s "segment 5")
             if total_segments > 1:
                 last_start = (total_segments - 1) * self.segment_duration
                 tail = total_duration - last_start
@@ -81,9 +66,7 @@ class VideoProcessor:
                 f"of {self.segment_duration}s each"
             )
 
-            # One VideoFileClip per segment: closing a subclip after write_videofile() tears down the
-            # shared ffmpeg reader and breaks the parent clip — segment 2+ then fails with
-            # "'NoneType' object has no attribute 'stdout'" inside MoviePy/ffmpeg bindings.
+            # One clip per segment.
             for i in range(total_segments):
                 start_time = i * self.segment_duration
                 if i == total_segments - 1:
@@ -184,13 +167,7 @@ class VideoProcessor:
         return segments
     
     def get_video_info(self, video_content: bytes) -> Tuple[float, int, int]:
-        """
-        Get video metadata
-        
-        Returns:
-            Tuple of (duration, width, height)
-        """
-        # Create temporary file for input video
+        """(duration, width, height)."""
         with tempfile.NamedTemporaryFile(suffix=f".{self.output_format}", delete=False) as temp_input:
             temp_input.write(video_content)
             temp_input.flush()

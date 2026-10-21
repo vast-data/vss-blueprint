@@ -235,7 +235,6 @@ def handler(ctx, event: VastEvent):
                     f"[COSMOS] Starting analysis → {ctx.reasoning_client.settings.cosmos_host} | {prompt_info}"
                 )
                 
-                # Pass custom_prompt as prompt parameter (overrides scenario)
                 reasoning_result = ctx.reasoning_client.analyze_video(
                     video_content, 
                     filename, 
@@ -314,8 +313,6 @@ def handler(ctx, event: VastEvent):
             return result
             
         except TransientError as e:
-            # Connection/5xx to the reasoning model after one retry: raise so the
-            # pipeline redelivers instead of acking a lost segment.
             seg = locals().get("source") or locals().get("filename") or "unknown"
             handler_span.set_attribute("error", True)
             handler_span.set_attribute("error.message", str(e))

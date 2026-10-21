@@ -1,4 +1,4 @@
-"""Monkey-patch VastDB SDK so predicate selects work on tables with vector columns."""
+"""Omit vector columns from VastDB selects."""
 from __future__ import annotations
 
 import logging

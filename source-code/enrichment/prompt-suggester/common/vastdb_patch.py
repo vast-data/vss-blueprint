@@ -1,4 +1,4 @@
-"""Skip vector columns in VastDB select() — SDK cannot project list<float> in tabular reads."""
+"""Omit vector columns from VastDB selects."""
 import pyarrow as pa
 import vastdb._internal as _internal
 

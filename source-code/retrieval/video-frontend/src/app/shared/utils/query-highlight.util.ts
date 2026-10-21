@@ -223,7 +223,7 @@ export interface PreviewChunkLike {
   timeline: PreviewSegmentLike[];
 }
 
-/** Prefer query-relevant segment for card preview; fallback to vector best match. */
+/** Preview segment for a card. */
 export function pickPreviewSegment(timeline: PreviewSegmentLike[]): PreviewSegmentLike | null {
   if (!timeline?.length) return null;
   const queryHits = timeline.filter(seg => seg.query_highlight);
