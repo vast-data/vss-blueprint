@@ -57,21 +57,23 @@ vim backend-secret.yaml
 Build images from the repo root, then set those image strings in each `*-deployment.yaml`.
 
 ```bash
-REGISTRY=your.registry/vss TAG=v1 source-code/scripts/build-retrieval-images.sh
+REGISTRY=your.registry/org source-code/scripts/build-retrieval-images.sh
 ```
+
+That pushes `vss2-backend`, `vss2-frontend`, `vss2-streaming`, and `vss2-batch`. `TAG` defaults to `latest`.
 
 Manual builds from `source-code/` as context (see [shared README](../../../source-code/shared/README.md#docker-builds)):
 
 ```bash
 cd source-code
 
-docker buildx build -f retrieval/video-backend/Dockerfile -t your.registry/vss-video-backend:v2 --push .
+docker buildx build -f retrieval/video-backend/Dockerfile -t your.registry/org/vss2-backend:latest --push .
 
-docker buildx build -f retrieval/video-frontend/Dockerfile -t your.registry/vss-video-frontend:v2 --push retrieval/video-frontend
+docker buildx build -f retrieval/video-frontend/Dockerfile -t your.registry/org/vss2-frontend:latest --push retrieval/video-frontend
 
-docker buildx build -f video-streaming/Dockerfile -t your.registry/vss-video-streaming:v2 --push .
+docker buildx build -f video-streaming/Dockerfile -t your.registry/org/vss2-streaming:latest --push .
 
-docker buildx build -f video-batch-sync/Dockerfile -t your.registry/vss-video-batch-sync:v2 --push .
+docker buildx build -f video-batch-sync/Dockerfile -t your.registry/org/vss2-batch:latest --push .
 ```
 
 If your cluster requires a specific architecture (for example `linux/amd64`), add `--platform linux/amd64` to each `docker build`. Ensure your registry is reachable from the cluster (image pull secrets if the registry is private).

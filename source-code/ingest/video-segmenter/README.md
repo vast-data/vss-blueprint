@@ -13,7 +13,7 @@ A VAST DataEngine serverless function that splits uploaded videos into smaller s
 
 ## Easy to Adjust
 
-Configure in `ingest/vss-video-ingest-secret-template.yaml`:
+Configure in `deployments/vss-deploy/dataengine/vss-cli-secret-file-template.yaml` (`vss2-secret`):
 
 - **`segment_duration`**: Length of each segment in seconds (default: `5`)
 - **`output_codec`**: Video codec (default: `libx264`)

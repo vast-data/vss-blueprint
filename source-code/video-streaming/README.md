@@ -59,7 +59,7 @@ Health check.
 - **Resolution**: Up to 1080p (YouTube path)
 - **YouTube VOD**: full video downloaded once, then chunked locally with ffmpeg stream-copy; any chunk > `capture_interval` gets a fast tail trim (copy remux) before upload; metadata `chunk_duration_sec` = nominal interval; segmenter caps segmentation to the same value
 - **YouTube live**: per-chunk yt-dlp with retries; one timeout does not stop the session; same trim/normalize before upload
-- **Image**: `your.registry/vss-video-streaming:v1` — build from `source-code/` (see [shared README](../shared/README.md#docker-builds))
+- **Image**: `<registry>/<path>/vss2-streaming:latest` — build from `source-code/` (see [shared README](../shared/README.md#docker-builds))
 - **Internal**: `video-stream-capture-service:5000`
 - **S3 metadata**: built via `build_s3_ingest_metadata()` from [`shared/ingest_metadata.py`](../shared/ingest_metadata.py)
 - **One capture is one stream**: each chunk object gets `stream_id`, 0-based `chunk_index`, and `ingest_kind=stream_chunk`. Explore lists them as **Play chunk N/total** with Previous/Next. Streaming does not record a username. Delete those chunks from Explore; an empty owner list is allowed.

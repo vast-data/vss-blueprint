@@ -59,4 +59,4 @@ Deployed as a Kubernetes pod accessible at:
 - **Internal**: `video-batch-sync-service:5000`
 - **External**: `http://video-batch-sync.<cluster_name>.vastdata.com`
 
-Docker image: `your.registry/vss-video-batch-sync:v1` — build from `source-code/` (see [shared README](../shared/README.md#docker-builds)) and [the site deploy](../../deployments/vss-deploy/README.md).
+Docker image: `<registry>/<path>/vss2-batch:latest` — build from `source-code/` (see [shared README](../shared/README.md#docker-builds)) and [the site deploy](../../deployments/vss-deploy/README.md).

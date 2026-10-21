@@ -1100,10 +1100,10 @@ def deploy_k8s(site: dict, keys: dict) -> None:
         shutil.rmtree(k8s)
     k8s.mkdir(parents=True)
     images = {
-        "your.registry/vss-video-backend:v1": image_ref(site["images"]["kubernetes"]["backend"], None),
-        "your.registry/vss-video-frontend:v1": image_ref(site["images"]["kubernetes"]["frontend"], None),
-        "your.registry/vss-video-streaming:v1": image_ref(site["images"]["kubernetes"]["streaming"], None),
-        "your.registry/vss-video-batch-sync:v1": image_ref(site["images"]["kubernetes"]["batch_sync"], None),
+        "your.registry/org/vss2-backend:latest": image_ref(site["images"]["kubernetes"]["backend"], None),
+        "your.registry/org/vss2-frontend:latest": image_ref(site["images"]["kubernetes"]["frontend"], None),
+        "your.registry/org/vss2-streaming:latest": image_ref(site["images"]["kubernetes"]["streaming"], None),
+        "your.registry/org/vss2-batch:latest": image_ref(site["images"]["kubernetes"]["batch_sync"], None),
     }
     tls = https_config(site)
     for src in K8S_DIR.glob("*.yaml"):
