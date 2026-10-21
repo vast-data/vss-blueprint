@@ -120,7 +120,6 @@ def handler(ctx, event: VastEvent):
             return result
 
         except TransientError as exc:
-            # Connection/5xx to YOLO after one retry: raise so the pipeline redelivers.
             seg = locals().get("source") or locals().get("filename") or "unknown"
             handler_span.record_exception(exc)
             ctx.logger.error("[DETECTOR] transient failure on %s, raising for pipeline retry: %s", seg, exc)

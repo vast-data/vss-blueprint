@@ -233,7 +233,6 @@ async def start_batch_sync(
         dest_bucket = request.dest_bucket or settings.s3_upload_bucket
         dest_use_ssl = request.dest_use_ssl if request.dest_use_ssl is not None else settings.s3_use_ssl
         
-        # Prepare payload for batch sync service
         payload = {
             "username": current_user.username,
             "source_access_key": request.source_access_key,

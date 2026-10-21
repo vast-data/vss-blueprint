@@ -14,12 +14,12 @@ _CONN_EXC = (
     requests.exceptions.Timeout,
     requests.exceptions.ChunkedEncodingError,
 )
-# 401/403 included: GPU/proxy auth blips and intermittent Forbidden must not soft-ack.
+# Statuses raised as TransientError.
 _TRANSIENT_STATUS = (401, 403, 408, 429, 500, 502, 503, 504)
 
 
 class TransientError(Exception):
-    """Retryable failure — hand the retry off to the VastPipeline."""
+    """Error the pipeline retries."""
 
 
 def _safe_non_negative_int(value: Any) -> int:
@@ -87,7 +87,7 @@ class S3Client:
 
 
 class CosmosReasoningClient:
-    """Cosmos reasoning client for video analysis using hosted Cosmos-Reason3 API"""
+    """Cosmos-Reason3 video client."""
 
     def __init__(self, settings):
         """Initialize Cosmos reasoning client"""
@@ -112,7 +112,6 @@ class CosmosReasoningClient:
                 "video_size_bytes": len(video_content)
             })
             
-            # Encode video to base64
             start_encode = time.time()
             video_base64 = base64.b64encode(video_content).decode()
             encode_time = time.time() - start_encode
@@ -127,7 +126,6 @@ class CosmosReasoningClient:
             
             logging.info(f"[COSMOS] Encoding video ({video_size_mb:.2f} MB) to base64 ({base64_size_kb:.1f} KB)...")
             
-            # Prepare content with base64-encoded video
             content = [
                 {"type": "text", "text": prompt},
                 {
@@ -155,8 +153,7 @@ class CosmosReasoningClient:
                     token if token.lower().startswith("bearer ") else f"Bearer {token}"
                 )
             
-            # One in-process retry on connection errors; transient HTTP -> TransientError
-            # so the handler raises and VastPipeline redelivers (no soft-ack).
+            # One connection retry, then TransientError.
             start_time = time.time()
             try:
                 response = self.session.post(
@@ -181,7 +178,6 @@ class CosmosReasoningClient:
 
             if response.status_code != 200:
                 error_text = response.text[:1000] if hasattr(response, "text") else str(response.status_code)
-                # Prefer redelivery over silent drop for unexpected HTTP errors.
                 raise TransientError(f"Cosmos API error ({response.status_code}): {error_text}")
 
             response_data = response.json()
@@ -225,15 +221,7 @@ class CosmosReasoningClient:
         scenario: Optional[str] = None,
         object_classes: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Complete video analysis pipeline using Cosmos reasoning.
-        
-        Args:
-            video_content: Video file content as bytes
-            filename: Name of the video file
-            prompt: Optional custom prompt (overrides scenario)
-            scenario: Optional scenario name (overrides settings default, ignored if prompt is provided)
-            object_classes: Optional comma-separated YOLO class names injected into the prompt
-        """
+        """Custom prompt wins over scenario. YOLO classes are added to the prompt."""
         if prompt is None:
             scenario_to_use = scenario if scenario else self.settings.scenario
             scene_prompt = get_prompt_for_scenario(scenario_to_use)
@@ -249,12 +237,10 @@ class CosmosReasoningClient:
                 "scenario": scenario_used
             })
             
-            # Check video size limit
             max_size_bytes = self.settings.max_video_size_mb * 1024 * 1024
             if len(video_content) > max_size_bytes:
                 raise ValueError(f"Video too large: {len(video_content)} > {max_size_bytes} bytes")
             
-            # Send base64-encoded video directly to API (no SFTP upload)
             reasoning_result = self.get_cosmos_reasoning(video_content, prompt)
             reasoning_content = normalize_reasoning_content(
                 reasoning_result["reasoning_content"]

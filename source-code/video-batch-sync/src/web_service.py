@@ -98,7 +98,6 @@ class BatchSyncService:
                     
                 for obj in page['Contents']:
                     key = obj['Key']
-                    # Check if file is MP4 (case-insensitive)
                     if key.lower().endswith('.mp4'):
                         mp4_files.append({
                             'key': key,
@@ -125,37 +124,24 @@ class BatchSyncService:
         source_endpoint: str,
         dest_endpoint: str
     ) -> Tuple[bool, Optional[str]]:
-        """
-        Copy file from source to destination S3 with metadata.
-        
-        Uses server-side copy if same endpoint, otherwise downloads and uploads.
-        Returns (success, error_message)
-        """
+        """Copy with metadata. Server-side copy on the same endpoint, otherwise stream. Returns (ok, error)."""
         try:
-            # Check if source and destination are on the same S3 endpoint
             same_endpoint = source_endpoint == dest_endpoint
             
             if same_endpoint:
-                # Try server-side copy (only works if same endpoint)
                 try:
-                    # Get source object metadata first
                     source_metadata = source_client.head_object(Bucket=source_bucket, Key=source_key)
                     
-                    # Prepare copy source
                     copy_source = {
                         'Bucket': source_bucket,
                         'Key': source_key
                     }
                     
-                    # Prepare metadata for destination
                     dest_metadata = {}
                     if 'Metadata' in source_metadata:
                         dest_metadata.update(source_metadata['Metadata'])
                     dest_metadata.update(metadata)
                     
-                    # Copy object with metadata
-                    # NOTE: copy_object is atomic - the object only appears in destination
-                    # after the copy operation completes successfully. No partial objects are created.
                     dest_client.copy_object(
                         CopySource=copy_source,
                         Bucket=dest_bucket,
@@ -168,23 +154,15 @@ class BatchSyncService:
                     return True, None
                     
                 except ClientError as e:
-                    # If copy fails, fall back to download/upload
                     logger.warning(f"Server-side copy failed, falling back to download/upload: {e}")
                     same_endpoint = False
             
-            # Download from source and upload to destination (works across different endpoints)
-            # This approach works even when source and destination are on different S3 endpoints
-            # because the data flows: Source S3 → memory (streaming chunks) → Destination S3
-            # Use streaming to avoid loading entire file into memory
             logger.info(f"Streaming copy from source: s3://{source_bucket}/{source_key} (endpoint: {source_endpoint})")
             logger.info(f"Uploading to destination: s3://{dest_bucket}/{dest_key} (endpoint: {dest_endpoint})")
             source_response = source_client.get_object(Bucket=source_bucket, Key=source_key)
             
-            # Get file size for logging
             file_size = source_response.get('ContentLength', 0)
             
-            # Use streaming upload to avoid loading entire file into memory
-            # This streams chunks directly from source to destination without storing in memory/disk
             class StreamingBodyWrapper:
                 """Wrapper to make S3 streaming body work with upload_fileobj"""
                 def __init__(self, body):
@@ -201,24 +179,16 @@ class BatchSyncService:
                 def __exit__(self, *args):
                     pass
             
-            # Stream upload using upload_fileobj (more memory efficient)
             streaming_body = StreamingBodyWrapper(source_response['Body'])
             
-            # Configure transfer for chunked upload (8MB chunks)
-            # This ensures large files are handled efficiently without memory issues
             transfer_config = TransferConfig(
-                multipart_threshold=8 * 1024 * 1024,  # 8MB - use multipart for files larger than this
-                multipart_chunksize=8 * 1024 * 1024,  # 8MB chunks
-                max_concurrency=1  # Sequential upload (one chunk at a time)
+                multipart_threshold=8 * 1024 * 1024,
+                multipart_chunksize=8 * 1024 * 1024,
+                max_concurrency=1
             )
             
             logger.info(f"Streaming upload to destination: s3://{dest_bucket}/{dest_key} ({file_size} bytes)")
             
-            # Upload with metadata using upload_fileobj for streaming
-            # NOTE: boto3's upload_fileobj is atomic - the object only becomes visible
-            # after ALL multipart parts are uploaded and the "complete multipart upload" call succeeds.
-            # If the upload fails mid-way, no incomplete object will be visible in the destination bucket.
-            # Incomplete multipart uploads may remain (not visible as objects) but lifecycle policies can clean them up.
             dest_client.upload_fileobj(
                 streaming_body,
                 dest_bucket,
@@ -516,7 +486,6 @@ class BatchSyncService:
             upload_delay = self._upload_delay_sec(config)
 
             for file_info in mp4_files:
-                # Check if job was stopped
                 with self._lock:
                     current_job = self.jobs.get(job.job_id)
                     if not current_job or current_job.status != 'running':
@@ -568,7 +537,6 @@ class BatchSyncService:
     def start_batch_sync(self, username: str, config: dict) -> Tuple[bool, str, Optional[str]]:
         """Start a new batch sync job"""
         with self._lock:
-            # Check if user already has an active job
             if username in self.user_jobs:
                 existing_job_id = self.user_jobs[username]
                 existing_job = self.jobs.get(existing_job_id)
@@ -584,7 +552,6 @@ class BatchSyncService:
             # Generate job ID
             job_id = f"{username}_{int(time.time())}"
             
-            # Create job
             job = BatchSyncJob(job_id, username, config)
             self.jobs[job_id] = job
             self.user_jobs[username] = job_id
@@ -694,7 +661,6 @@ def check_objects():
         if not s3_client:
             return jsonify({'success': False, 'error': 'Failed to setup S3 client'}), 400
         
-        # Check objects
         result = batch_sync_service.check_objects(
             s3_client,
             data['bucket'],

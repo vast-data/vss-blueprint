@@ -754,7 +754,7 @@ export class VideoPlayerComponent implements OnInit {
 
   searchQuery = computed(() => (this.data.query ?? this.chunk()?.query ?? '').trim());
 
-  /** Stable SafeHtml per segment — do not rebuild on timeupdate (kills text selection). */
+  /** Cached caption HTML per segment. */
   segmentCaptionHtml = computed(() => {
     const c = this.chunk();
     const terms = this.queryTerms();

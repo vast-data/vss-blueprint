@@ -19,12 +19,12 @@ _CONN_EXC = (
     requests.exceptions.Timeout,
     requests.exceptions.ChunkedEncodingError,
 )
-# 401/403 included: GPU/proxy auth blips and intermittent Forbidden must not soft-ack.
+# Statuses raised as TransientError.
 _TRANSIENT_STATUS = (401, 403, 408, 429, 500, 502, 503, 504)
 
 
 class TransientError(Exception):
-    """Retryable failure — hand the retry off to the VastPipeline."""
+    """Error the pipeline retries."""
 
 
 class CosmosEmbed1Client:
@@ -39,7 +39,7 @@ class CosmosEmbed1Client:
         host = (getattr(settings, "embeddinghost", "localhost") or "localhost").strip().strip("/")
         port = int(getattr(settings, "embeddingport", 8002) or 8002)
         default_port = 443 if scheme == "https" else 80
-        if "/" in host:  # host carries a path prefix, e.g. gateway/tenant/model
+        if "/" in host:  # host includes a path, e.g. gateway/tenant/model
             hostname, _, path = host.partition("/")
             netloc = hostname if port == default_port else f"{hostname}:{port}"
             self.base_url = f"{scheme}://{netloc}/{path}/v1"
@@ -52,7 +52,7 @@ class CosmosEmbed1Client:
     def _headers(self) -> dict:
         headers = {"Content-Type": "application/json"}
         token = (self.embedding_authorization or "").strip()
-        if token:  # explicit token wins (works for local gateways too, not just cloud)
+        if token:
             headers["Authorization"] = token if token.lower().startswith("bearer ") else f"Bearer {token}"
         elif self.is_cloud and self.nvidia_api_key:
             headers["Authorization"] = f"Bearer {self.nvidia_api_key}"
@@ -60,8 +60,7 @@ class CosmosEmbed1Client:
 
     def _post(self, payload: dict, timeout: int = 120) -> List[List[float]]:
         url = f"{self.base_url}/embeddings"
-        # One in-process retry on connection errors; transient HTTP -> TransientError
-        # so the handler raises and VastPipeline redelivers (no soft-ack).
+        # One connection retry, then TransientError.
         try:
             response = requests.post(url, json=payload, headers=self._headers(), timeout=timeout)
         except _CONN_EXC as exc:
@@ -78,7 +77,6 @@ class CosmosEmbed1Client:
             if not vectors:
                 raise RuntimeError("Cosmos-Embed1 returned no embeddings")
             return vectors
-        # Prefer redelivery over silent drop for unexpected HTTP errors.
         raise TransientError(f"Cosmos-Embed1 failed: {response.status_code}: {response.text[:500]}")
 
     def embed_texts(self, texts: List[str], *, for_query: bool = False) -> List[List[float]]:

@@ -35,21 +35,16 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# ============================================================================
-# VASTDB MONKEY PATCH TO SUPPORT UNSUPPORTED COLUMN TYPES (vector columns)
-# ============================================================================
-# This patch filters out unsupported column types (like vector embeddings)
-# from the schema before building queries, working around a VastDB SDK limitation.
+# Query schema without vector columns.
 
 _original_build_query_data_request = _internal.build_query_data_request
 
 def _patched_build_query_data_request(schema, predicate, field_names):
-    """Patched version that filters out unsupported field types from the schema."""
+    """Schema fields used in the query."""
     supported_fields = []
     unsupported_field_names = set()
     
     for field in schema:
-        # Check for unsupported types (vector columns)
         if 'fixed_size_list' in str(field.type):
             unsupported_field_names.add(field.name)
         else:
@@ -68,14 +63,14 @@ def _patched_build_query_data_request(schema, predicate, field_names):
 
 # Apply the monkey patch globally
 _internal.build_query_data_request = _patched_build_query_data_request
-print("[VastDB] Applied monkey patch to support tables with vector columns")  # Use print for import-time logging
+print("[VastDB] Applied monkey patch to support tables with vector columns")
 # ============================================================================
 DASHBOARD_SCAN_COLUMNS = (
     "source", "filename", "original_video", "segment_number", "total_segments",
     "segment_start_sec", "segment_end_sec", "extra_metadata",
     "upload_timestamp", "camera_id", "capture_type", "location",
     "object_classes", "object_counts", "perception_ok", "is_public", "allowed_users",
-    # Browse / explore chunk cards (one scan avoids per-video queries)
+    # Browse and explore chunk cards.
     "reasoning_content", "tags", "duration",
 )
 
@@ -115,7 +110,7 @@ class VastDBService:
         try:
             logger.info(f"Setting up ADBC connection to VastDB at {self.settings.vdb_endpoint}")
             
-            # Check for driver in embedded location (from Docker image), then fallback to /tmp
+            # Image path first, then /tmp.
             driver_paths = [
                 "/opt/adbc-driver/libadbc_driver_vastdb.so",  # Embedded in Docker image
                 "/tmp/libadbc_driver_vastdb.so"  # Fallback location
@@ -258,15 +253,11 @@ class VastDBService:
             vector_column = "vectors"
         
         try:
-            # Build SQL query with vector similarity
-            # Fetch more results than needed to account for permission filtering
-            fetch_count = min(top_k * 3, 100)  # Fetch 3x to ensure enough after filtering
+            fetch_count = min(top_k * 3, 100)
             
-            # Use ADBC for vector similarity search
             if not self._adbc_connection:
                 raise RuntimeError("ADBC not configured - cannot perform vector similarity search")
             
-            # Build SQL query using array_cosine_distance function (better for normalized embeddings)
             table_path = f'"{self._adbc_connection["bucket"]}/{self._adbc_connection["schema"]}"."{self.settings.vdb_collection}"'
             dimension = len(query_embedding)
             
@@ -316,7 +307,7 @@ class VastDBService:
                     try:
                         if custom_start_date:
                             # Parse datetime string - remove timezone info to treat as LOCAL time
-                            # This matches how VastDB stores upload_timestamp (local time)
+                            # Local time.
                             clean_start = custom_start_date.replace('Z', '').replace('+00:00', '')
                             # Remove milliseconds if present
                             if '.' in clean_start:
@@ -550,7 +541,6 @@ class VastDBService:
                         logger.debug(f"[ROW {row_index}] Permission denied")
                 except Exception as e:
                     logger.error(f"[ROW {row_index}] Error processing row {idx}: {e}", exc_info=True)
-                    # Continue processing other rows instead of failing completely
                     permission_filtered_count += 1
                     continue
             
@@ -969,26 +959,10 @@ class VastDBService:
             return default
     
     def _user_has_access(self, row, user: User, include_public: bool = True, public_only: bool = False) -> bool:
-        """
-        NEW LOGIC: Check if user has access to a video segment
-        
-        Security model:
-        - is_public=True → everyone can see (regardless of allowed_users)
-        - is_public=False → only users in allowed_users can see
-        
-        Args:
-            row: DataFrame row with video data
-            user: Current user
-            include_public: Whether to include public videos (False = "My Videos" only)
-            public_only: If True, only allow access when is_public=True ("Public Only" scope)
-            
-        Returns:
-            True if user has access, False otherwise
-        """
+        """Public rows are visible to everyone. Private rows only to allowed_users."""
         try:
             logger.debug(f"[ACCESS_CHECK] Starting access check for user {user.username}, include_public={include_public}, public_only={public_only}")
             
-            # If public_only=True ("Public Only" scope), only allow rows where is_public is True
             if public_only:
                 is_public_raw = row.get('is_public', False)
                 is_public_value = self._safe_scalar_value(is_public_raw, default=False)
@@ -998,7 +972,6 @@ class VastDBService:
                     return False
                 return True
             
-            # If include_public=False ("My Videos" mode), only show videos where user is in allowed_users
             if not include_public:
                 try:
                     allowed_users_raw = row.get('allowed_users', [])
@@ -1012,8 +985,6 @@ class VastDBService:
                     logger.error(f"[ACCESS_CHECK] Error in include_public=False branch: {e}", exc_info=True)
                     return False
             
-            # If is_public=True, everyone can see it (no further checks)
-            # Safely extract scalar value and convert to bool (handles NumPy bool_, pandas bool, arrays, etc.)
             try:
                 is_public_raw = row.get('is_public', False)
                 logger.debug(f"[ACCESS_CHECK] is_public_raw type: {type(is_public_raw)}, value: {is_public_raw}")
@@ -1035,7 +1006,6 @@ class VastDBService:
                             return True
                     except ValueError as ve:
                         logger.error(f"[ACCESS_CHECK] ValueError converting is_public to bool: {ve}, value: {is_public_value}, type: {type(is_public_value)}")
-                        # If conversion fails, treat as False
                         is_public_bool = False
                 else:
                     logger.debug(f"[ACCESS_CHECK] is_public is None or NaN, treating as False")
@@ -1077,7 +1047,7 @@ class VastDBService:
             VideoSearchResult if found and accessible, None otherwise
         """
         try:
-            # Use ADBC for query (excludes vector column to avoid VastDB client issues)
+            # Non-vector columns.
             if not self._adbc_connection:
                 raise RuntimeError("ADBC not configured")
             
@@ -1495,7 +1465,7 @@ class VastDBService:
         return by_video
 
     def _list_segments_for_video_single(self, original_video: str, user: User) -> List[dict]:
-        """Single-video timeline (fallback if batched OR fails)."""
+        """Timeline for one video."""
         safe_video = original_video.replace("'", "''")
         sql_query = f"""
             SELECT

@@ -161,7 +161,6 @@ async def start_streaming(
     logger.info(f"[STREAMING] Bucket: {request.bucket_name}, Name: {request.name}, Interval: {request.capture_interval}s")
     
     try:
-        # Prepare payload for streaming service
         payload = {
             "youtube_url": request.youtube_url,
             "access_key": request.access_key,

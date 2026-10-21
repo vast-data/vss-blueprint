@@ -55,8 +55,6 @@ def handler(ctx, event: VastEvent):
                 source = reasoning_event.get("source", "")
                 filename = reasoning_event.get("filename", "")
 
-                # Skip redeliveries whose segment is already in VastDB before doing the
-                # expensive embed work (writer dedup would drop it anyway).
                 if ctx.segment_index and source and ctx.segment_index.is_indexed(source):
                     ctx.logger.info(f"[SKIP] {filename} | already indexed in VastDB")
                     return {"status": "skipped", "reason": "Already indexed"}
@@ -223,8 +221,6 @@ def handler(ctx, event: VastEvent):
             return result
             
         except TransientError as e:
-            # Connection/5xx to the embed server after one retry: raise so the
-            # pipeline redelivers instead of acking a lost segment.
             seg = source or filename or "unknown"
             handler_span.set_attribute("error", True)
             handler_span.set_attribute("error.message", str(e))

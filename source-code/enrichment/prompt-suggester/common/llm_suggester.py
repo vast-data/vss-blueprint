@@ -259,7 +259,7 @@ def generate_suggestions(
     data = _parse_llm_json(content)
     raw_items = data.get("items") or []
     if not raw_items and (data.get("key_events") or data.get("search_prompts")):
-        # Older schema fallback: ignore inventable key_events path without index
+        # Legacy shape: a search_prompts list.
         for p in data.get("search_prompts") or []:
             raw_items.append({"i": len(raw_items) % max(len(sample), 1), "query_text": p, "label": ""})
 

@@ -354,8 +354,7 @@ export class StreamingProgressDialogComponent implements OnInit, OnDestroy {
       next: (result) => {
         if (result.success) {
           this.status.set(result);
-          // Also update the main layout's status if dialog is open
-          // This ensures the indicator stays in sync
+          // Keep the layout indicator on the same status.
         } else {
           // If streaming stopped, clear status
           this.status.set({

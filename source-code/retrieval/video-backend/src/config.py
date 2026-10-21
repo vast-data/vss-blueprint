@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     visual_embedding_local_nim: bool = Field(default=False, description="Use local NIM for visual embeddings")
     hybrid_text_weight: float = Field(default=0.6, ge=0.0, le=1.0, description="Hybrid search weight for text vs visual")
     
-    # Cosmos-Reason3 text synthesis (search / explore summarize — text-only, no video)
+    # Cosmos-Reason3 text synthesis
     cosmos_host: str = Field(default="", description="Cosmos-Reason3 host (same as ingest reasoner)")
     cosmos_port: int = Field(default=8001, description="Cosmos-Reason3 port")
     cosmoshttpscheme: str = Field(default="http", description="http or https for Cosmos-Reason3")
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     synthesis_timeout_seconds: int = Field(default=120, description="Cosmos synthesis API timeout in seconds")
     synthesis_max_continuations: int = Field(default=4, description="Extra continuation chunks when response hits token limit")
 
-    # Legacy Llama/NIM settings (unused; synthesis uses Cosmos-Reason3 above)
+    # Unused. Synthesis uses Cosmos-Reason3.
     llm_model_name: str = Field(default="meta/llama-3.1-8b-instruct", description="Deprecated")
     llm_host: str = Field(default="integrate.api.nvidia.com", description="Deprecated")
     llm_port: int = Field(default=443, description="Deprecated")
@@ -89,7 +89,7 @@ class Settings(BaseSettings):
         default=10,
         description="Max parallel uploads; extra requests wait in queue (no rejection)"
     )
-    # Ingest video-segmenter converts all to MP4 for Cosmos; these match segmenter's supported list for phones
+    # Same extensions the segmenter accepts. It converts them to MP4.
     allowed_video_extensions: list[str] = Field(
         default=[".mp4", ".mov", ".webm", ".avi", ".mkv"],
         description="Allowed video extensions at upload (ingest pipeline converts to MP4 for Cosmos)"

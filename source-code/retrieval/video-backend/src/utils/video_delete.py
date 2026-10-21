@@ -101,7 +101,7 @@ def plan_object_deletes(
     rows: Iterable[dict],
     allowed_buckets: Set[str],
 ) -> tuple[Dict[str, Set[str]], Dict[str, Set[str]], List[str]]:
-    """Return exact keys, list prefixes, and URIs skipped because the bucket is unknown."""
+    """Exact keys, list prefixes, and URIs outside the allowed buckets."""
     keys: Dict[str, Set[str]] = {}
     prefixes: Dict[str, Set[str]] = {}
     skipped: List[str] = []

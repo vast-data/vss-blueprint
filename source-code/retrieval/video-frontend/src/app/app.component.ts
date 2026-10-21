@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './shared/services/theme.service';
 
@@ -9,13 +9,7 @@ import { ThemeService } from './shared/services/theme.service';
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
-export class AppComponent implements OnInit {
-  // Initialize theme service early to apply theme before any components render
+export class AppComponent {
   private themeService = inject(ThemeService);
-
-  ngOnInit() {
-    // Theme service initializes automatically via constructor
-    // This injection ensures it's created early in the app lifecycle
-  }
 }
 

@@ -108,7 +108,7 @@ def with_ingress_tls(text: str, secret_name: str) -> str:
 def image_ref(value: str, tag) -> str:
     ref = str(value).strip()
     use = str(tag).strip() if tag else "latest"
-    # registry:port/repo has a colon before the slash; a tag colon is after the last slash.
+    # Tag is the colon after the last slash.
     name = ref.rsplit("/", 1)[-1]
     if ":" in name:
         return ref
@@ -619,7 +619,7 @@ def require_keys(why: str) -> dict:
 
 
 def ensure_user_group(vms: Vms, user: dict, group_name: str, gid) -> dict:
-    """Membership is the gids list. The groups field on create is ignored by VMS."""
+    """Set the user's group id."""
     if group_name in (user.get("groups") or []):
         say(f"  {user.get('name')} is in {group_name}", "32")
         return user
@@ -721,11 +721,7 @@ def views_by_bucket(vms: Vms, tenant_id) -> dict:
 
 
 def check_storage_views(checks: list, vms: Vms, tenant_id, site: dict) -> None:
-    """Broker and bucket existence come from VMS views.
-
-    `vastde buckets list` unmarshals provisioned_capacity as int32 and fails the
-    whole list when any view is larger than about 2 GiB.
-    """
+    """Broker and bucket views."""
     broker = str(need(site, "dataengine", "broker") or "")
     planned = [
         need(site, "storage", "buckets", "chunks"),
@@ -1360,7 +1356,7 @@ def delete_topic(vms: Vms, broker: str, topic: str) -> None:
 
 
 def schema_names(vms: Vms, bucket_name: str) -> list[str] | None:
-    """Schema names in one database bucket, from VMS. None when VMS cannot answer."""
+    """Schema names in the database bucket."""
     code, data = vms.call("GET", f"/schemas/?database_name={bucket_name}", timeout=30)
     if code != 200:
         return None
@@ -1387,11 +1383,7 @@ def table_names(vms: Vms, bucket_name: str, schema_name: str) -> list[str]:
 
 
 def drop_database(vms: Vms, site: dict) -> None:
-    """Drop every VastDB table and schema in the database bucket so the view can be deleted.
-
-    Ingest creates them when chunks are written. The query-engine address is not
-    reachable from the deploy host, so this uses the same VMS API that listed them.
-    """
+    """Drop tables and schemas in the database bucket."""
     storage = site.get("storage") or {}
     buckets = storage.get("buckets") or {}
     bucket_name = buckets.get("database")
@@ -1404,7 +1396,7 @@ def drop_database(vms: Vms, site: dict) -> None:
     if not known:
         say(f"schema {schema_name} absent", "32")
         return
-    # Children first, so a nested schema is empty before its parent is removed.
+    # Deepest schema name first.
     for name in sorted(known, key=lambda item: item.count("/"), reverse=True):
         for table in table_names(vms, bucket_name, name):
             say(f"delete table {name}/{table}", "1;33")

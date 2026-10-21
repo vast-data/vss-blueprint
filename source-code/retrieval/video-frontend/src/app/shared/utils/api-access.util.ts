@@ -11,7 +11,7 @@ export function friendlyVastDbAccessMessage(context: VastDbAccessContext): strin
   return `Could not load ${CONTEXT_LABEL[context]}. Check backend logs and VastDB access.`;
 }
 
-/** True for gateway outages and typical VastDB connectivity failures. */
+/** VastDB or gateway error. */
 export function isLikelyVastDbOrGatewayError(err: unknown): boolean {
   const e = err as {
     status?: number;
