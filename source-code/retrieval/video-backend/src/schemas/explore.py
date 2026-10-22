@@ -22,9 +22,11 @@ class ExploreResponse(BaseModel):
     total: int
     uploads_by_day: List[ExploreUploadDay]
     locations: List[ExploreLocationItem] = Field(default_factory=list)
+    cameras: List[ExploreLocationItem] = Field(default_factory=list)
     scope: str
     selected_date: Optional[str] = None
     selected_location: Optional[str] = None
+    selected_camera_id: Optional[str] = None
     indexed: str = "complete"
     limit: int
     offset: int

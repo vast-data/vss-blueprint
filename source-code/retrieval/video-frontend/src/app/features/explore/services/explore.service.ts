@@ -19,6 +19,7 @@ export class ExploreService {
     scope: VideoScope;
     date?: string | null;
     location?: string | null;
+    cameraId?: string | null;
     indexed?: 'complete' | 'partial';
     limit?: number;
     offset?: number;
@@ -33,6 +34,9 @@ export class ExploreService {
     }
     if (params.location) {
       httpParams = httpParams.set('location', params.location);
+    }
+    if (params.cameraId) {
+      httpParams = httpParams.set('camera_id', params.cameraId);
     }
     return this.http.get<ExploreResponse>(`${environment.apiUrl}/videos/explore`, {
       params: httpParams,

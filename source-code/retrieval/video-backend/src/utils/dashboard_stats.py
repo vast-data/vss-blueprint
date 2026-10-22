@@ -95,14 +95,14 @@ def filter_rows_by_metadata_label(
     return [row for row in rows if _metadata_label(row.get(field)) == label]
 
 
-def build_location_filter_options(rows: List[dict], limit: int = 30) -> List[Dict[str, Any]]:
-    """Video counts per location label (for explore filter pills)."""
+def build_metadata_filter_options(rows: List[dict], field: str, limit: int = 30) -> List[Dict[str, Any]]:
+    """Video counts per metadata label (for explore filter pills)."""
     by_video: Dict[str, str] = {}
     for row in rows:
         ov = str(row.get("original_video") or row.get("source") or "").strip()
         if not ov:
             continue
-        label = _metadata_label(row.get("location"))
+        label = _metadata_label(row.get(field))
         prev = by_video.get(ov)
         if prev is None or (prev == "(empty)" and label != "(empty)"):
             by_video[ov] = label
@@ -111,6 +111,11 @@ def build_location_filter_options(rows: List[dict], limit: int = 30) -> List[Dic
         {"label": label, "chunk_count": count}
         for label, count in counter.most_common(limit)
     ]
+
+
+def build_location_filter_options(rows: List[dict], limit: int = 30) -> List[Dict[str, Any]]:
+    """Video counts per location label."""
+    return build_metadata_filter_options(rows, "location", limit)
 
 
 def _group_key(row: dict) -> str:

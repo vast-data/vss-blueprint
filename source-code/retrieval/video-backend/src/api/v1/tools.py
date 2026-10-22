@@ -86,6 +86,10 @@ async def tool_explore(
         default=None,
         description="Filter chunks by upload metadata location label",
     ),
+    camera_id: Optional[str] = Query(
+        default=None,
+        description="Filter chunks by upload metadata camera id",
+    ),
     limit: int = Query(default=48, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
@@ -95,6 +99,7 @@ async def tool_explore(
         scope=scope,
         date=date,
         location=location,
+        camera_id=camera_id,
         limit=limit,
         offset=offset,
     )

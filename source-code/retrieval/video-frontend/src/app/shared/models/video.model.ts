@@ -151,9 +151,11 @@ export interface ExploreResponse {
   total: number;
   uploads_by_day: ExploreUploadDay[];
   locations?: ExploreLocationItem[];
+  cameras?: ExploreLocationItem[];
   scope: VideoScope;
   selected_date?: string | null;
   selected_location?: string | null;
+  selected_camera_id?: string | null;
   indexed?: 'complete' | 'partial';
   limit: number;
   offset: number;

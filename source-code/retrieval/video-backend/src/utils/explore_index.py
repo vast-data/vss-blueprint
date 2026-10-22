@@ -5,7 +5,11 @@ from collections import Counter, defaultdict
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.utils.browse_chunk import fully_indexed_videos, incomplete_videos
-from src.utils.dashboard_stats import _metadata_label, _parse_upload_day, build_location_filter_options
+from src.utils.dashboard_stats import (
+    _metadata_label,
+    _parse_upload_day,
+    build_metadata_filter_options,
+)
 from src.utils.stream_index import build_stream_meta_by_video
 
 
@@ -27,6 +31,7 @@ def group_accessible_rows(
         rows_by_video[ov].append(row)
         day = _parse_upload_day(row.get("upload_timestamp"))
         loc = _metadata_label(row.get("location"))
+        cam = _metadata_label(row.get("camera_id"))
         entry = by_video.get(ov)
         if entry is None:
             by_video[ov] = {
@@ -34,6 +39,7 @@ def group_accessible_rows(
                 "upload_day": day,
                 "upload_timestamp": row.get("upload_timestamp"),
                 "location_label": loc,
+                "camera_label": cam,
             }
             continue
 
@@ -46,6 +52,8 @@ def group_accessible_rows(
                 entry["upload_day"] = day
         if entry.get("location_label") == "(empty)" and loc != "(empty)":
             entry["location_label"] = loc
+        if entry.get("camera_label") == "(empty)" and cam != "(empty)":
+            entry["camera_label"] = cam
 
     return rows_by_video, by_video
 
@@ -83,4 +91,8 @@ def uploads_by_day_counts(by_video: Dict[str, dict]) -> List[dict]:
 
 
 def location_filter_options(accessible_flat: List[dict], has_videos: bool) -> List[dict]:
-    return build_location_filter_options(accessible_flat) if has_videos else []
+    return build_metadata_filter_options(accessible_flat, "location") if has_videos else []
+
+
+def camera_filter_options(accessible_flat: List[dict], has_videos: bool) -> List[dict]:
+    return build_metadata_filter_options(accessible_flat, "camera_id") if has_videos else []

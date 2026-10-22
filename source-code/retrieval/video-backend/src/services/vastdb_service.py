@@ -18,6 +18,7 @@ from src.utils.browse_chunk import prepare_browse_segments
 from src.utils.explore_index import (
     build_explore_catalog,
     group_accessible_rows,
+    camera_filter_options,
     location_filter_options,
     uploads_by_day_counts,
 )
@@ -1594,11 +1595,12 @@ class VastDBService:
         scope: str = "all",
         date: Optional[str] = None,
         location: Optional[str] = None,
+        camera_id: Optional[str] = None,
         indexed: str = "complete",
         limit: int = 50,
         offset: int = 0,
     ) -> dict:
-        """Browse parent videos by upload date and location (no vector search)."""
+        """Browse parent videos by upload date, location, and camera id."""
         include_public = scope in ("all", "public")
         public_only = scope == "public"
 
@@ -1633,7 +1635,9 @@ class VastDBService:
                 table_message = "Rows exist in VastDB but none are visible for the selected scope."
 
         uploads_by_day = uploads_by_day_counts(by_video)
-        locations = location_filter_options(accessible_flat, bool(by_video))
+        has_videos = bool(by_video)
+        locations = location_filter_options(accessible_flat, has_videos)
+        cameras = camera_filter_options(accessible_flat, has_videos)
 
         videos = sorted(
             by_video.values(),
@@ -1644,6 +1648,8 @@ class VastDBService:
             videos = [v for v in videos if v.get("upload_day") == date]
         if location:
             videos = [v for v in videos if v.get("location_label") == location]
+        if camera_id:
+            videos = [v for v in videos if v.get("camera_label") == camera_id]
 
         total = len(videos)
         page = videos[offset : offset + limit]
@@ -1660,17 +1666,24 @@ class VastDBService:
             if chunk:
                 chunks.append(chunk)
 
-        if table_available and location and by_video and not videos:
-            table_message = f"No videos match location filter: {location}"
+        if table_available and by_video and not videos and (location or camera_id):
+            parts = []
+            if location:
+                parts.append(f"location {location}")
+            if camera_id:
+                parts.append(f"camera {camera_id}")
+            table_message = "No videos match " + " and ".join(parts)
 
         return {
             "chunks": chunks,
             "total": total,
             "uploads_by_day": uploads_by_day,
             "locations": locations,
+            "cameras": cameras,
             "scope": scope,
             "selected_date": date,
             "selected_location": location,
+            "selected_camera_id": camera_id,
             "indexed": indexed,
             "limit": limit,
             "offset": offset,
