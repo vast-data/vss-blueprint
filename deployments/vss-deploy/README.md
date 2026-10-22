@@ -10,7 +10,7 @@ cp site.yaml.example site.yaml
 ./deploy.sh site.yaml
 ```
 
-`site.yaml` is gitignored. A successful deploy prints the storage user's access key and secret key when the key is created, and again after `deploy finished`. The same values are written to `deploy-work/storage-keys.yaml` (mode 600). Keep that file while the user exists. If the user already has a key and the file is missing, the script refuses to mint another one.
+`site.yaml` is gitignored. A successful deploy prints the storage user's access key and secret key, and again after `deploy finished`. The same values are written to `deploy-work/storage-keys.yaml` (mode 600). A later deploy replaces that file: it deletes this storage user's access keys, creates one new key, and overwrites the file. If the user already has a key and the file is missing, the script refuses to mint another one.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ These must already be true before `./deploy.sh`. `--check` probes them and does 
 
 - Python 3.10 or newer. `./deploy.sh` creates `deploy-work/venv` and installs PyYAML there.
 - `kubectl`, with `KUBECONFIG` set or `site.kubeconfig` filled. The shell value wins.
-- `vastde` v5.5.0-sp2 on `PATH`, already logged in as `vms.user` against `vms.host` for tenant `vms.tenant`. The tenant, username, and VMS host in `vastde config view` must match `site.yaml`. This deploy path is aligned with DataEngine 5.5.0-sp2. Install and builder selection: [Get vastde and roll function images](#get-vastde-and-roll-function-images).
+- `vastde` 5.4 or 5.5 on `PATH`, already logged in as `vms.user` against `vms.host` for tenant `vms.tenant`. The tenant, username, and VMS host in `vastde config view` must match `site.yaml`. On 5.5 the pipeline file includes `name`; on 5.4 that field is left out and `--name` is used. Function image builds use the 5.5.0-sp2 builder: [Get vastde and roll function images](#get-vastde-and-roll-function-images).
 - `vastde` is only for Data Engine: the compute cluster, the container registry, triggers, functions, and pipelines. Views, topics, users, groups, and VastDB schemas and tables go through the VMS API.
 
 ### Kubernetes and DataEngine
@@ -45,6 +45,18 @@ Image names in `site.yaml` must be the names you pushed. See [scripts](../../sou
 - Broker view `dataengine.broker`, with the Kafka protocol.
 - View policy `vms.view_policy`.
 - Local group `storage.group`. The new user is attached to this group.
+
+### Names this file creates
+
+These names must be new on the cluster. A second site needs its own. DataEngine names are tenant-wide.
+
+VMS: `storage.user`. Buckets `storage.buckets.chunks`, `segments`, and `database`. Topic `dataengine.topic` on the broker.
+
+VastDB, inside the database bucket: `storage.schema`, `storage.collection`, `storage.prompts_collection`.
+
+DataEngine: `dataengine.pipeline`, every `pipeline.triggers` name, and every `pipeline.functions` name. `images.functions` uses those function names as its keys.
+
+`dataengine.secret` is `vss2-secret` in `site.namespace`. Deploying the same file again reuses these objects.
 
 ### Models and connectivity
 
@@ -180,12 +192,6 @@ Cleanup stops the functions first. It deletes every VastDB table and schema in t
 
 ## What the script creates
 
-- Local user `storage.user`, member of `storage.group`, and one access key.
-- Buckets `storage.buckets.chunks`, `segments`, and `database`.
-- Topic `dataengine.topic` on the broker.
-- Triggers, functions, and one pipeline from the `pipeline` section, including the scheduled prompt-suggester.
-- DataEngine secret `dataengine.secret`. Function images read `vss2-secret`, so that is the name to use.
-- Kubernetes deployments, services, and ingresses for backend, frontend, streaming, and batch sync.
-- A TLS secret when `https` is set.
+The cluster names are listed under [Names this file creates](#names-this-file-creates). The script also creates one access key for `storage.user`, the Kubernetes deployments, services, and ingresses for backend, frontend, streaming, and batch sync, and a TLS secret when `https` is set.
 
 Ingress hosts are `vss-lab.<ingress_domain>`, `vss-backend.<ingress_domain>`, `vss-streamer.<ingress_domain>`, and `vss-batch-sync.<ingress_domain>`. The UI is `vss-lab`. The frontend proxies `/api/` to the backend, so the browser uses the lab host.

@@ -13,7 +13,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import yaml
 
@@ -618,6 +618,43 @@ def require_keys(why: str) -> dict:
     return keys
 
 
+def access_key_names(user: dict) -> list[str]:
+    """Access key ids on a VMS user."""
+    names = []
+    for item in user.get("access_keys") or []:
+        if isinstance(item, str) and item:
+            names.append(item)
+        elif isinstance(item, dict):
+            name = item.get("access_key") or item.get("key")
+            if name:
+                names.append(str(name))
+    return names
+
+
+def delete_access_keys(vms: Vms, user: dict) -> None:
+    """Delete every access key on this storage user."""
+    for name in access_key_names(user):
+        say("delete access key", "1;33")
+        code, data = vms.call(
+            "DELETE",
+            f"/users/{user['id']}/access_keys/{quote(name, safe='')}/",
+        )
+        if code == 404:
+            continue
+        vms_expect(code, data, "delete access key")
+
+
+def create_access_key(vms: Vms, user: dict) -> dict:
+    """Create one access key and write deploy-work/storage-keys.yaml."""
+    say("create access key", "1;36")
+    code, data = vms.call("POST", f"/users/{user['id']}/access_keys/", {})
+    if code not in (200, 201) or not isinstance(data, dict) or "secret_key" not in data:
+        raise SystemExit(f"access key failed HTTP {code}: {redact(str(data)[:300])}")
+    save_keys(data["access_key"], data["secret_key"])
+    say("  saved deploy-work/storage-keys.yaml", "32")
+    return data
+
+
 def ensure_user_group(vms: Vms, user: dict, group_name: str, gid) -> dict:
     """Set the user's group id."""
     if group_name in (user.get("groups") or []):
@@ -654,23 +691,20 @@ def deploy_storage(ctx: dict) -> dict:
         user = data
         say(f"  user id {user.get('id')}", "32")
     user = ensure_user_group(vms, user, group_name, ctx["gid"])
-    keys = load_keys()
-    existing = user.get("access_keys") or []
-    if keys is None:
-        if existing:
-            raise SystemExit(
-                f"user {user_name} already has an access key and deploy-work/storage-keys.yaml is missing. "
-                "Refusing to create another key."
-            )
-        say("create access key", "1;36")
-        code, data = vms.call("POST", f"/users/{user['id']}/access_keys/", {})
-        if code not in (200, 201) or "secret_key" not in data:
-            raise SystemExit(f"access key failed HTTP {code}: {redact(str(data)[:300])}")
-        save_keys(data["access_key"], data["secret_key"])
-        keys = data
-        say("  saved deploy-work/storage-keys.yaml", "32")
+    code, fresh = vms.call("GET", f"/users/{user['id']}/")
+    if code == 200 and isinstance(fresh, dict):
+        user = fresh
+    if load_keys() is not None:
+        say("replace deploy-work/storage-keys.yaml", "1;36")
+        delete_access_keys(vms, user)
+        keys = create_access_key(vms, user)
+    elif access_key_names(user):
+        raise SystemExit(
+            f"user {user_name} already has an access key and deploy-work/storage-keys.yaml is missing. "
+            "Refusing to create another key."
+        )
     else:
-        say("reuse deploy-work/storage-keys.yaml", "32")
+        keys = create_access_key(vms, user)
     say(f"  {user_name} access key: {keys['access_key']}", "1;32")
     say(f"  {user_name} secret key: {keys['secret_key']}", "1;32")
 
@@ -784,6 +818,49 @@ def topic_names(vms: Vms, broker: str) -> set[str]:
     }
 
 
+def resource_names(data) -> set[str]:
+    """Names from a vastde list payload. A resource has a guid, status, or vrn."""
+    found: set[str] = set()
+
+    def walk(node) -> None:
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+            return
+        if not isinstance(node, dict):
+            return
+        vrn = node.get("vrn")
+        if isinstance(vrn, str) and vrn.startswith("vast:"):
+            tail = vrn.rsplit(":", 1)[-1]
+            if tail:
+                found.add(tail)
+        name = node.get("name")
+        if isinstance(name, str) and name and any(key in node for key in ("guid", "status", "vrn")):
+            found.add(name)
+        for value in node.values():
+            if isinstance(value, (list, dict)):
+                walk(value)
+
+    walk(data)
+    return found
+
+
+def cli_table_names(text: str) -> set[str]:
+    """First column of a vastde table. Truncated cells end with an ellipsis."""
+    found = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or set(stripped) <= {"-"}:
+            continue
+        head = stripped.split()[0]
+        if head.endswith("...") or head.endswith("…"):
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", head):
+            continue
+        found.add(head)
+    return found
+
+
 def cli_names(kind: str, *, required: bool = False) -> set[str]:
     """One Data Engine list per kind: triggers, functions, or pipelines."""
     code, out = run(["vastde", kind, "list", "-o", "json"], timeout=60)
@@ -793,13 +870,23 @@ def cli_names(kind: str, *, required: bool = False) -> set[str]:
             raise SystemExit(f"vastde {kind} list failed: {message}")
         say(f"vastde {kind} list failed: {message}", "1;31")
         return set()
-    lowered = out.lower()
-    if "no " in lowered and "available" in lowered:
-        return set()
-    try:
-        return {row.get("name") for row in rows_of(json_from_cli(out)) if row.get("name")}
-    except Exception:
-        return set()
+    found: set[str] = set()
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(out):
+        starts = [pos for pos in (out.find("[", index), out.find("{", index)) if pos >= 0]
+        if not starts:
+            break
+        start = min(starts)
+        try:
+            value, end = decoder.raw_decode(out, start)
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        found.update(resource_names(value))
+        index = max(end, start + 1)
+    found.update(cli_table_names(out))
+    return found
 
 
 def run_ok(cmd: list[str], timeout: int = 120) -> None:
@@ -954,6 +1041,14 @@ def write_ingest_secret(site: dict, keys: dict) -> Path:
     return path
 
 
+def vastde_series() -> tuple[int, int]:
+    code, out = run(["vastde", "version"])
+    match = re.search(r"v?(\d+)\.(\d+)", out)
+    if code != 0 or not match:
+        raise SystemExit(f"vastde version unreadable: {redact(out)[:120]}")
+    return int(match.group(1)), int(match.group(2))
+
+
 def write_pipeline_manifest(site: dict) -> Path:
     de = site["dataengine"]
     triggers = site["pipeline"]["triggers"]
@@ -998,6 +1093,9 @@ def write_pipeline_manifest(site: dict) -> Path:
             "config": {"secrets": [de["secret"]], "environment_variables": []},
         },
     }
+    # Pipeline file name. Required by vastde 5.5.
+    if vastde_series() >= (5, 5):
+        doc = {"name": de["pipeline"], **doc}
     path = WORK / "pipeline.yaml"
     path.write_text(yaml.safe_dump(doc, sort_keys=False))
     return path

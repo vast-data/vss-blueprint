@@ -27,7 +27,7 @@ The system has three main parts:
 
 ## Deployment
 
-Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide lists what must already exist (namespace attached to DataEngine, models reachable from a Kubernetes node, broker, images) and the `deploy.sh` flags.
+Install one site with [vss-deploy](deployments/vss-deploy/README.md). That guide lists what must already exist, which `site.yaml` names must be new, and the `deploy.sh` flags.
 
 ### Quick Start
 
