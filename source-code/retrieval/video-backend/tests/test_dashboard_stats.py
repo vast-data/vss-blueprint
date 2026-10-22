@@ -198,6 +198,19 @@ class DashboardStatsTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["source"], "a")
 
+    def test_camera_filter_options(self):
+        from src.utils.dashboard_stats import build_metadata_filter_options
+
+        rows = [
+            {"camera_id": "CAM-001", "original_video": "v1"},
+            {"camera_id": "CAM-001", "original_video": "v1"},
+            {"camera_id": "", "original_video": "v2"},
+        ]
+        options = build_metadata_filter_options(rows, "camera_id")
+        labels = {item["label"]: item["chunk_count"] for item in options}
+        self.assertEqual(labels["CAM-001"], 1)
+        self.assertEqual(labels["(empty)"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

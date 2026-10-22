@@ -565,6 +565,10 @@ async def explore_videos(
         default=None,
         description="Filter chunks by upload metadata location label",
     ),
+    camera_id: Optional[str] = Query(
+        default=None,
+        description="Filter chunks by upload metadata camera id",
+    ),
     indexed: str = Query(
         default="complete",
         pattern="^(complete|partial)$",
@@ -575,10 +579,12 @@ async def explore_videos(
 ):
     """Browse indexed video chunks by upload date without a search query."""
     logger.info(
-        "Explore request from %s: scope=%s date=%s indexed=%s limit=%s offset=%s",
+        "Explore request from %s: scope=%s date=%s location=%s camera_id=%s indexed=%s limit=%s offset=%s",
         current_user.username,
         scope,
         date,
+        location,
+        camera_id,
         indexed,
         limit,
         offset,
@@ -589,6 +595,7 @@ async def explore_videos(
         scope=scope,
         date=date,
         location=location,
+        camera_id=camera_id,
         indexed=indexed,
         limit=limit,
         offset=offset,

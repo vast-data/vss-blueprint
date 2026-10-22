@@ -8,6 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { ScopePillsComponent } from '../../shared/components/scope-pills.component';
 import { ChunkCardComponent } from '../search/components/chunk-card.component';
+import { PillRailComponent } from './components/pill-rail.component';
 import { ExploreService } from './services/explore.service';
 import { ChunkSearchResult, ExploreUploadDay, VideoScope } from '../../shared/models/video.model';
 import { VideoPlayerComponent } from '../player/video-player.component';
@@ -32,6 +33,7 @@ import { PageRefreshService } from '../../shared/services/page-refresh.service';
     MatTooltipModule,
     ScopePillsComponent,
     ChunkCardComponent,
+    PillRailComponent,
   ],
   template: `
     <div class="explore-container">
@@ -51,89 +53,110 @@ import { PageRefreshService } from '../../shared/services/page-refresh.service';
       </section>
 
       <section class="controls-card">
-        <app-scope-pills
-          label="Browse in:"
-          [scope]="scope()"
-          (scopeChange)="onScopeChange($event)">
-        </app-scope-pills>
-
-        <div class="date-rail">
-          <span class="date-label">Index:</span>
-          <div class="date-pills">
-            <button
-              type="button"
-              class="date-pill"
-              [class.active]="indexed() === 'complete'"
-              (click)="selectIndexed('complete')">
-              <mat-icon>check_circle</mat-icon>
-              <span>Complete</span>
-            </button>
-            <button
-              type="button"
-              class="date-pill"
-              [class.active]="indexed() === 'partial'"
-              (click)="selectIndexed('partial')"
-              matTooltip="Videos that have some segments indexed and are still missing others">
-              <mat-icon>hourglass_top</mat-icon>
-              <span>Incomplete</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="date-rail">
-          <span class="date-label">Upload day:</span>
-          <div class="date-pills">
-            <button
-              type="button"
-              class="date-pill"
-              [class.active]="!selectedDate()"
-              (click)="selectDate(null)">
-              <mat-icon>calendar_view_month</mat-icon>
-              <span>All days</span>
-              <span class="count">{{ totalVideos() }}</span>
-            </button>
-            @for (day of uploadsByDay(); track day.date) {
-              <button
-                type="button"
-                class="date-pill"
-                [class.active]="selectedDate() === day.date"
-                (click)="selectDate(day.date)"
-                [matTooltip]="formatDay(day.date)">
-                <mat-icon>event</mat-icon>
-                <span>{{ formatDayShort(day.date) }}</span>
-                <span class="count">{{ day.chunk_count }}</span>
-              </button>
-            }
-          </div>
-        </div>
-
-        @if (locationOptions().length) {
-          <div class="date-rail">
-            <span class="date-label">Location:</span>
+        <div class="browse-row">
+          <app-scope-pills
+            label="Browse in:"
+            [scope]="scope()"
+            (scopeChange)="onScopeChange($event)">
+          </app-scope-pills>
+          <div class="index-switch">
+            <span class="date-label">Index:</span>
             <div class="date-pills">
               <button
                 type="button"
                 class="date-pill"
-                [class.active]="!selectedLocation()"
-                (click)="selectLocation(null)">
-                <mat-icon>place</mat-icon>
-                <span>All locations</span>
-                <span class="count">{{ totalLocationVideos() }}</span>
+                [class.active]="indexed() === 'complete'"
+                (click)="selectIndexed('complete')">
+                <mat-icon>check_circle</mat-icon>
+                <span>Complete</span>
               </button>
-              @for (item of locationOptions(); track item.label) {
-                <button
-                  type="button"
-                  class="date-pill"
-                  [class.active]="selectedLocation() === item.label"
-                  (click)="selectLocation(item.label)"
-                  [matTooltip]="item.label">
-                  <mat-icon>location_on</mat-icon>
-                  <span>{{ formatLocationLabel(item.label) }}</span>
-                  <span class="count">{{ item.chunk_count }}</span>
-                </button>
-              }
+              <button
+                type="button"
+                class="date-pill"
+                [class.active]="indexed() === 'partial'"
+                (click)="selectIndexed('partial')"
+                matTooltip="Videos that have some segments indexed and are still missing others">
+                <mat-icon>hourglass_top</mat-icon>
+                <span>Incomplete</span>
+              </button>
             </div>
           </div>
+        </div>
+
+        <app-pill-rail label="Upload day:">
+          <button
+            type="button"
+            class="date-pill"
+            [class.active]="!selectedDate()"
+            (click)="selectDate(null)">
+            <mat-icon>calendar_view_month</mat-icon>
+            <span>All days</span>
+            <span class="count">{{ totalVideos() }}</span>
+          </button>
+          @for (day of uploadsByDay(); track day.date) {
+            <button
+              type="button"
+              class="date-pill"
+              [class.active]="selectedDate() === day.date"
+              (click)="selectDate(day.date)"
+              [matTooltip]="formatDay(day.date)">
+              <mat-icon>event</mat-icon>
+              <span>{{ formatDayShort(day.date) }}</span>
+              <span class="count">{{ day.chunk_count }}</span>
+            </button>
+          }
+        </app-pill-rail>
+
+        @if (locationOptions().length) {
+          <app-pill-rail label="Location:">
+            <button
+              type="button"
+              class="date-pill"
+              [class.active]="!selectedLocation()"
+              (click)="selectLocation(null)">
+              <mat-icon>place</mat-icon>
+              <span>All locations</span>
+              <span class="count">{{ totalLocationVideos() }}</span>
+            </button>
+            @for (item of locationOptions(); track item.label) {
+              <button
+                type="button"
+                class="date-pill"
+                [class.active]="selectedLocation() === item.label"
+                (click)="selectLocation(item.label)"
+                [matTooltip]="item.label">
+                <mat-icon>location_on</mat-icon>
+                <span>{{ formatPillLabel(item.label) }}</span>
+                <span class="count">{{ item.chunk_count }}</span>
+              </button>
+            }
+          </app-pill-rail>
+        }
+
+        @if (cameraOptions().length) {
+          <app-pill-rail label="Camera ID:">
+            <button
+              type="button"
+              class="date-pill"
+              [class.active]="!selectedCamera()"
+              (click)="selectCamera(null)">
+              <mat-icon>videocam</mat-icon>
+              <span>All cameras</span>
+              <span class="count">{{ totalCameraVideos() }}</span>
+            </button>
+            @for (item of cameraOptions(); track item.label) {
+              <button
+                type="button"
+                class="date-pill"
+                [class.active]="selectedCamera() === item.label"
+                (click)="selectCamera(item.label)"
+                [matTooltip]="item.label">
+                <mat-icon>videocam</mat-icon>
+                <span>{{ formatPillLabel(item.label) }}</span>
+                <span class="count">{{ item.chunk_count }}</span>
+              </button>
+            }
+          </app-pill-rail>
         }
       </section>
 
@@ -186,7 +209,10 @@ import { PageRefreshService } from '../../shared/services/page-refresh.service';
               All uploads
             }
             @if (selectedLocation()) {
-              · {{ formatLocationLabel(selectedLocation()!) }}
+              · {{ formatPillLabel(selectedLocation()!) }}
+            }
+            @if (selectedCamera()) {
+              · {{ formatPillLabel(selectedCamera()!) }}
             }
           </h2>
           <div class="results-meta">
@@ -323,13 +349,22 @@ import { PageRefreshService } from '../../shared/services/page-refresh.service';
       gap: 1.25rem;
     }
 
-    .date-rail {
+    .browse-row {
       display: flex;
-      align-items: flex-start;
-      gap: 1rem;
+      align-items: center;
+      gap: 1.5rem;
       flex-wrap: wrap;
-      padding-top: 0.5rem;
-      border-top: 1px solid var(--border-color);
+    }
+
+    .index-switch {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .index-switch .date-label {
+      padding-top: 0;
     }
 
     .date-label {
@@ -343,13 +378,14 @@ import { PageRefreshService } from '../../shared/services/page-refresh.service';
     .date-pills {
       display: flex;
       gap: 0.5rem;
-      flex-wrap: wrap;
-      flex: 1;
+      flex-wrap: nowrap;
     }
 
     .date-pill {
       display: inline-flex;
       align-items: center;
+      flex: 0 0 auto;
+      white-space: nowrap;
       gap: 0.4rem;
       padding: 0.5rem 0.9rem;
       background: var(--bg-card);
@@ -574,7 +610,9 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
   indexed = signal<'complete' | 'partial'>('complete');
   selectedDate = signal<string | null>(null);
   selectedLocation = signal<string | null>(null);
+  selectedCamera = signal<string | null>(null);
   locationOptions = signal<{ label: string; chunk_count: number }[]>([]);
+  cameraOptions = signal<{ label: string; chunk_count: number }[]>([]);
   chunks = signal<ChunkSearchResult[]>([]);
   uploadsByDay = signal<ExploreUploadDay[]>([]);
   total = signal(0);
@@ -609,6 +647,10 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
     return this.locationOptions().reduce((sum, item) => sum + item.chunk_count, 0);
   }
 
+  totalCameraVideos(): number {
+    return this.cameraOptions().reduce((sum, item) => sum + item.chunk_count, 0);
+  }
+
   onScopeChange(next: VideoScope) {
     this.scope.set(next);
     this.offset.set(0);
@@ -634,6 +676,12 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
     this.load();
   }
 
+  selectCamera(cameraId: string | null) {
+    this.selectedCamera.set(cameraId);
+    this.offset.set(0);
+    this.load();
+  }
+
   load() {
     this.loading.set(true);
     this.accessWarning.set(null);
@@ -643,6 +691,7 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
         scope: this.scope(),
         date: this.selectedDate(),
         location: this.selectedLocation(),
+        cameraId: this.selectedCamera(),
         indexed: this.indexed(),
         limit: ExplorePageComponent.PAGE_SIZE,
         offset: this.offset(),
@@ -655,6 +704,11 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
             this.locationOptions.set(res.locations);
           } else if (!this.selectedLocation()) {
             this.locationOptions.set([]);
+          }
+          if (res.cameras?.length) {
+            this.cameraOptions.set(res.cameras);
+          } else if (!this.selectedCamera()) {
+            this.cameraOptions.set([]);
           }
           this.total.set(res.total);
           this.loading.set(false);
@@ -691,7 +745,7 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
     });
   }
 
-  formatLocationLabel(value: string): string {
+  formatPillLabel(value: string): string {
     const text = (value || '').trim();
     if (!text || text === '(empty)') return 'Not set';
     if (text.length <= 36) return text;
