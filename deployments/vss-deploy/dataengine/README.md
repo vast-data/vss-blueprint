@@ -2,7 +2,7 @@
 
 The install that creates storage, the pipeline, and the Kubernetes app is [the site deploy](../README.md). Use this directory only when that stack already exists, or when you need to create or change one function, trigger, secret, or pipeline by hand.
 
-Names in these templates (`video-realtime-processing-pipeline`, `video-chunk-land-trigger`, and so on) are the manual examples. A site created by `deploy.sh` uses the names in `site.yaml` (`vss-pipeline`, `vss-chunk-trigger`, and the rest). Do not apply these manifests on top of a `deploy.sh` pipeline unless you mean to create a second one.
+Names in these templates (`video-realtime-processing-pipeline`, `video-chunk-land-trigger`, and so on) are the manual examples. A site created by `deploy.sh` uses the names in `site.yaml`. Do not apply these manifests on top of a `deploy.sh` pipeline unless you mean to create a second one.
 
 Function images read the DataEngine secret named `vss2-secret`. Keep that name.
 
