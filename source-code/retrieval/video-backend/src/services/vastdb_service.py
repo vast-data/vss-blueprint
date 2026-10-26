@@ -72,6 +72,8 @@ DASHBOARD_SCAN_COLUMNS = (
     "object_classes", "object_counts", "perception_ok", "is_public", "allowed_users",
     # Browse and explore chunk cards.
     "reasoning_content", "tags", "duration",
+    # Reasoner and embedding metrics stored on each indexed segment.
+    "cosmos_model", "tokens_used", "cached_prompt_tokens",
 )
 
 settings = get_settings()
