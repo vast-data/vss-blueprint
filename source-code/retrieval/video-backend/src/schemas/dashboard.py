@@ -87,6 +87,40 @@ class RecentVideoItem(BaseModel):
     is_public: bool
 
 
+class DashboardModels(BaseModel):
+    reasoner_calls: int = 0
+    token_total: int = 0
+    token_avg: float = 0.0
+    cached_tokens: int = 0
+
+
+class LiveEndpoint(BaseModel):
+    name: str
+    label: str
+    status: str = Field(description="ready | busy | down | unavailable")
+    model: str = ""
+    detail: Optional[str] = None
+    running: Optional[int] = None
+    waiting: Optional[int] = None
+    cache_pct: Optional[float] = None
+    avg_latency_sec: Optional[float] = None
+    gpu_memory_pct: Optional[float] = None
+    gpu_util_pct: Optional[float] = None
+    ttft_sec: Optional[float] = None
+    prefill_sec: Optional[float] = None
+    decode_sec: Optional[float] = None
+    finished: Optional[int] = None
+    cut_off: Optional[int] = None
+    failed: Optional[int] = None
+    metrics_available: bool = False
+
+
+class LiveEndpoints(BaseModel):
+    probed_at: str
+    reasoner: LiveEndpoint
+    embed: LiveEndpoint
+
+
 class DashboardStatsResponse(BaseModel):
     table: str
     table_available: bool = True
@@ -96,6 +130,8 @@ class DashboardStatsResponse(BaseModel):
     scope: str = Field(default="all", description="all | mine | public")
     overview: DashboardOverview
     quality: DashboardQuality
+    models: DashboardModels = Field(default_factory=DashboardModels)
+    live_endpoints: Optional[LiveEndpoints] = None
     objects: List[ObjectStatItem]
     metadata: Dict[str, List[CountItem]]
     uploads_by_day: List[UploadDayItem]

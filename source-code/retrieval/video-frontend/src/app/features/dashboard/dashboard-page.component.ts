@@ -11,8 +11,10 @@ import { DashboardService } from '../../shared/services/dashboard.service';
 import { PageRefreshService } from '../../shared/services/page-refresh.service';
 import { SuggestionsService } from '../../shared/services/suggestions.service';
 import {
+  DashboardModels,
   DashboardScope,
   DashboardStatsResponse,
+  LiveEndpoint,
   UploadDayItem,
 } from '../../shared/models/dashboard.model';
 import { KeyEventSuggestion } from '../../shared/models/suggestions.model';
@@ -55,7 +57,7 @@ interface DashboardKpiCard {
             <mat-icon>dashboard</mat-icon>
             Data Dashboard
           </h1>
-          <p>Live view of what is stored in VastDB — segments, objects, metadata, and ingest health.</p>
+          <p>Live view of what is stored in VastDB — segments, models, objects, and ingest health.</p>
         </div>
       </header>
 
@@ -128,6 +130,130 @@ interface DashboardKpiCard {
           }
         </section>
         }
+
+        <mat-card class="panel model-panel">
+          <mat-card-header>
+            <mat-card-title>Models</mat-card-title>
+            <mat-card-subtitle>Live NIM endpoints, and reasoner totals stored on indexed segments</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            @if (data.live_endpoints; as live) {
+              <div class="live-band">
+                <h3>Live endpoints</h3>
+                <div class="live-grid">
+                  @for (ep of [live.reasoner, live.embed]; track ep.name) {
+                    <div
+                      class="live-tile"
+                      [class.ready]="ep.status === 'ready'"
+                      [class.busy]="ep.status === 'busy'"
+                      [class.down]="ep.status === 'down'"
+                      [class.unavailable]="ep.status === 'unavailable'">
+                      <div class="live-main">
+                        <div class="live-head">
+                          <span class="status-dot"></span>
+                          <span class="live-name">{{ ep.label }}</span>
+                          <span class="status-pill">{{ liveStatusLabel(ep.status) }}</span>
+                        </div>
+                        @if (ep.model) {
+                          <div class="model-name" [matTooltip]="ep.model">{{ ep.model }}</div>
+                        }
+                        @if (ep.avg_latency_sec != null) {
+                          <div class="live-avg">
+                            <span class="live-avg-value">{{ formatSeconds(ep.avg_latency_sec) }}</span>
+                            <span class="gauge-hint">avg response · since this process started</span>
+                          </div>
+                        }
+                        @if (ep.running != null || ep.waiting != null) {
+                          <div class="live-queue">
+                            <span>{{ ep.running ?? 0 }} running</span>
+                            <span [class.hot]="(ep.waiting ?? 0) > 0">{{ ep.waiting ?? 0 }} waiting</span>
+                          </div>
+                        }
+                        @if (ep.gpu_memory_pct != null || ep.gpu_util_pct != null) {
+                          <div class="gpu-line">
+                            @if (ep.gpu_memory_pct != null) {
+                              <div class="gpu-meter" [matTooltip]="'GPU memory ' + pct(ep.gpu_memory_pct)">
+                                <div class="gpu-fill" [class.hot]="ep.gpu_memory_pct >= 90" [style.width.%]="ep.gpu_memory_pct"></div>
+                              </div>
+                            }
+                            <span class="gauge-hint">
+                              @if (ep.gpu_memory_pct != null) { memory {{ pct(ep.gpu_memory_pct) }} }
+                              @if (ep.gpu_util_pct != null) { · gpu {{ pct(ep.gpu_util_pct) }} }
+                            </span>
+                          </div>
+                        }
+                        @if (ep.ttft_sec != null || ep.prefill_sec != null || ep.decode_sec != null) {
+                          <div class="gauge-hint">
+                            @if (ep.ttft_sec != null) { {{ formatSeconds(ep.ttft_sec) }} first token }
+                            @if (ep.prefill_sec != null) { · {{ formatSeconds(ep.prefill_sec) }} prefill }
+                            @if (ep.decode_sec != null) { · {{ formatSeconds(ep.decode_sec) }} decode }
+                          </div>
+                        }
+                        @if (ep.finished != null || ep.cut_off != null || ep.failed != null) {
+                          <div class="gauge-hint">
+                            {{ ep.finished ?? 0 }} finished
+                            · <span [class.hot-text]="(ep.cut_off ?? 0) > 0">{{ ep.cut_off ?? 0 }} cut off</span>
+                            @if ((ep.failed ?? 0) > 0) {
+                              · <span class="hot-text">{{ ep.failed }} failed</span>
+                            }
+                          </div>
+                        }
+                        @if (ep.detail && ep.status !== 'ready' && ep.status !== 'busy') {
+                          <div class="gauge-hint">{{ ep.detail }}</div>
+                        }
+                      </div>
+                      @if (ep.cache_pct != null) {
+                        <div
+                          class="gauge-ring cache"
+                          [style.--pct]="ep.cache_pct + '%'"
+                          [matTooltip]="'KV cache ' + ep.cache_pct + '%'">
+                          <span>{{ cacheLabel(ep) }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            @if (data.table_available && data.models; as models) {
+              <div class="indexed-band">
+              <h3>Indexed segments</h3>
+              <p class="band-note">Follows the selected scope. One row is one stored reasoner call.</p>
+              <div class="model-gauges">
+                <div class="model-gauge">
+                  <div class="gauge-copy">
+                    <div class="gauge-value">{{ models.reasoner_calls }}</div>
+                    <div class="gauge-label">Reasoner calls</div>
+                    <div class="gauge-hint">{{ callShare(data) }}% of segments</div>
+                  </div>
+                  <div
+                    class="gauge-ring calls"
+                    [style.--pct]="callShare(data) + '%'"
+                    [matTooltip]="callShare(data) + '% of segment rows'">
+                  </div>
+                </div>
+
+                <div class="model-gauge">
+                  <div class="gauge-copy">
+                    <div class="gauge-value" [matTooltip]="models.token_total.toLocaleString() + ' tokens'">
+                      {{ formatTokens(models.token_total) }}
+                    </div>
+                    <div class="gauge-label">Tokens</div>
+                    <div class="gauge-hint">avg {{ formatTokenAvg(models.token_avg) }} / call</div>
+                    @if (models.cached_tokens > 0) {
+                      <div class="cached-meter" [matTooltip]="models.cached_tokens.toLocaleString() + ' cached input tokens'">
+                        <div class="cached-fill" [style.width.%]="cachedShare(models)"></div>
+                      </div>
+                      <div class="gauge-hint">{{ formatTokens(models.cached_tokens) }} cached</div>
+                    }
+                  </div>
+                </div>
+              </div>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
 
         @if (data.s3_inventory?.errors && data.table_available) {
           <div class="info-banner warn">
@@ -550,6 +676,266 @@ interface DashboardKpiCard {
       font-size: 0.72rem;
       color: var(--text-muted);
       line-height: 1.3;
+    }
+
+    .model-panel {
+      margin-bottom: 1rem;
+    }
+
+    .live-band h3,
+    .indexed-band h3 {
+      margin: 0 0 0.65rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+
+    .live-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .live-tile {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      min-height: 7.2rem;
+      padding: 0.9rem 1rem;
+      border-radius: 12px;
+      background:
+        radial-gradient(120% 80% at 100% 0%, rgba(115, 200, 253, 0.08), transparent 55%),
+        var(--bg-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .live-main { min-width: 0; flex: 1; }
+
+    .live-head {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+    }
+
+    .live-tile.ready .status-dot { background: var(--accent-success, #22c55e); }
+    .live-tile.busy .status-dot { background: var(--accent-warning, #e8af6f); }
+    .live-tile.down .status-dot { background: #f07178; }
+
+    .live-name {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .status-pill {
+      margin-left: auto;
+      padding: 0.12rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .live-tile.ready .status-pill { color: var(--accent-success, #22c55e); }
+    .live-tile.busy .status-pill { color: var(--accent-warning, #e8af6f); }
+    .live-tile.down .status-pill { color: #f07178; }
+
+    .live-queue {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 0.45rem;
+      font-size: 0.84rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+
+    .live-avg {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      margin-top: 0.35rem;
+    }
+
+    .live-avg-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--accent-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .live-queue .hot { color: var(--accent-warning, #e8af6f); font-weight: 600; }
+
+    .gpu-line {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+    }
+
+    .gpu-meter {
+      flex: 1;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .gpu-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent-primary);
+    }
+
+    .gpu-fill.hot { background: var(--accent-warning, #e8af6f); }
+
+    .hot-text { color: var(--accent-warning, #e8af6f); }
+
+    .gauge-ring.cache {
+      width: 68px;
+      height: 68px;
+      display: grid;
+      place-items: center;
+      margin-left: 0;
+    }
+
+    .gauge-ring.cache span {
+      position: relative;
+      z-index: 1;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gauge-ring.cache::after { inset: 9px; background: var(--bg-secondary); }
+
+    .live-tile.ready .gauge-ring.cache { --ring: var(--accent-success, #22c55e); }
+    .live-tile.busy .gauge-ring.cache { --ring: var(--accent-warning, #e8af6f); }
+    .live-tile.down .gauge-ring.cache { --ring: #f07178; }
+
+    .indexed-band {
+      margin-top: 1.1rem;
+      padding-top: 0.9rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .band-note {
+      margin: -0.35rem 0 0.75rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 800px) {
+      .live-grid { grid-template-columns: 1fr; }
+    }
+
+    .model-gauges {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .model-gauge {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-height: 4.6rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: 10px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .gauge-ring {
+      position: relative;
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      margin-left: auto;
+      background: conic-gradient(var(--ring, var(--accent-primary)) var(--pct, 0%), rgba(255, 255, 255, 0.08) 0);
+    }
+
+    .gauge-ring::after {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+    }
+
+    .gauge-ring.calls { --ring: var(--accent-primary); }
+    .gauge-ring.time { --ring: #7c4dff; }
+
+    .gauge-copy { min-width: 0; }
+
+    .gauge-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--accent-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gauge-value.warn { color: var(--accent-warning, #e8af6f); }
+
+    .gauge-label {
+      margin-top: 0.2rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .gauge-hint {
+      margin-top: 0.15rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .cached-meter {
+      height: 4px;
+      margin-top: 0.4rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .cached-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent-success, #22c55e);
+    }
+
+    .model-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-primary);
+    }
+
+    @media (max-width: 900px) {
+      .model-gauges {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .model-gauges {
+        grid-template-columns: 1fr;
+      }
     }
 
     .panel-grid {
@@ -1280,6 +1666,68 @@ export class DashboardPageComponent implements OnInit, OnDestroy {
 
   formatCount(value?: number | null): string | number {
     return value == null ? '—' : value;
+  }
+
+  liveStatusLabel(status: string): string {
+    switch (status) {
+      case 'ready': return 'Ready';
+      case 'busy': return 'Busy';
+      case 'down': return 'Down';
+      default: return 'No probe';
+    }
+  }
+
+  cacheLabel(ep: LiveEndpoint): string {
+    return this.pct(ep.cache_pct);
+  }
+
+  pct(value?: number | null): string {
+    if (value == null || !Number.isFinite(value)) return '';
+    return `${Math.round(value)}%`;
+  }
+
+  callShare(data: DashboardStatsResponse): number {
+    const rows = data.overview.segment_rows;
+    const calls = data.models?.reasoner_calls ?? 0;
+    if (!rows || calls <= 0) return 0;
+    return Math.min(100, Math.round((calls / rows) * 1000) / 10);
+  }
+
+  cachedShare(models: DashboardModels): number {
+    if (!models.token_total || models.cached_tokens <= 0) return 0;
+    return Math.min(100, (models.cached_tokens / models.token_total) * 100);
+  }
+
+  formatTokens(value: number): string {
+    if (!Number.isFinite(value)) return '0';
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000) return this.compactNumber(value / 1_000_000, 'M');
+    if (abs >= 10_000) return this.compactNumber(value / 1_000, 'k');
+    return Math.round(value).toLocaleString();
+  }
+
+  formatTokenAvg(value: number): string {
+    if (!Number.isFinite(value)) return '0';
+    if (Math.abs(value) >= 10_000) return this.formatTokens(value);
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded)
+      ? rounded.toLocaleString()
+      : rounded.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+
+  formatSeconds(value: number): string {
+    if (!Number.isFinite(value) || value <= 0) return '0s';
+    if (value >= 60) {
+      const minutes = Math.floor(value / 60);
+      const seconds = Math.round(value % 60);
+      return `${minutes}m ${seconds}s`;
+    }
+    const digits = value >= 10 ? 1 : 2;
+    return `${value.toFixed(digits).replace(/\.?0+$/, '')}s`;
+  }
+
+  private compactNumber(value: number, suffix: string): string {
+    return `${value.toFixed(1).replace(/\.0$/, '')}${suffix}`;
   }
 
   formatS3Errors(errors: Record<string, string>): string {

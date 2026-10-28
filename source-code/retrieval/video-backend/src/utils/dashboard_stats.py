@@ -118,6 +118,43 @@ def build_location_filter_options(rows: List[dict], limit: int = 30) -> List[Dic
     return build_metadata_filter_options(rows, "location", limit)
 
 
+def _positive_int(value: Any) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return number if number > 0 else 0
+
+
+def _model_label(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def build_model_metrics(rows: List[dict]) -> Dict[str, Any]:
+    """Reasoner call and token totals stored on indexed segment rows.
+
+    A reasoner call is a row with a cosmos model name or tokens_used > 0.
+    """
+    token_total = 0
+    cached_tokens = 0
+    reasoner_calls = 0
+    for row in rows:
+        model = _model_label(row.get("cosmos_model"))
+        tokens = _positive_int(row.get("tokens_used"))
+        if not model and tokens <= 0:
+            continue
+        reasoner_calls += 1
+        token_total += tokens
+        cached_tokens += _positive_int(row.get("cached_prompt_tokens"))
+
+    return {
+        "reasoner_calls": reasoner_calls,
+        "token_total": token_total,
+        "token_avg": round(token_total / reasoner_calls, 1) if reasoner_calls else 0.0,
+        "cached_tokens": cached_tokens,
+    }
+
+
 def _group_key(row: dict) -> str:
     stream = stream_fields_from_row(row)
     stream_id = str(stream.get("stream_id") or "").strip()
@@ -292,6 +329,7 @@ def build_dashboard_stats(rows: List[dict]) -> Dict[str, Any]:
             "private_segment_rows": segment_total - public_segments,
         },
         "quality": quality,
+        "models": build_model_metrics(segment_rows),
         "objects": [
             {
                 "label": label,
@@ -399,6 +437,7 @@ def empty_dashboard_stats() -> Dict[str, Any]:
             "with_object_classes": 0,
             "with_object_classes_pct": 0.0,
         },
+        "models": build_model_metrics([]),
         "objects": [],
         "metadata": {
             "camera_id": [],

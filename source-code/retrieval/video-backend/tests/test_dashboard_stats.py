@@ -142,6 +142,60 @@ class DashboardStatsTests(unittest.TestCase):
         self.assertEqual(stats["overview"]["total_rows"], 0)
         self.assertEqual(stats["objects"], [])
         self.assertEqual(stats["recent_videos"], [])
+        self.assertEqual(stats["models"]["reasoner_calls"], 0)
+        self.assertEqual(stats["models"]["token_total"], 0)
+
+    def test_model_metrics_from_indexed_rows(self):
+        rows = [
+            {
+                "source": "s3://b/a.mp4",
+                "cosmos_model": "nvidia/cosmos3-nano-reasoner",
+                "embedding_model": "nvidia/cosmos-embed1",
+                "visual_embedding_model": "nvidia/cosmos-embed1",
+                "tokens_used": 1000,
+                "cached_prompt_tokens": 200,
+                "processing_time": 2.0,
+                "is_public": True,
+            },
+            {
+                "source": "s3://b/b.mp4",
+                "cosmos_model": "nvidia/cosmos3-nano-reasoner",
+                "embedding_model": "nvidia/cosmos-embed1",
+                "visual_embedding_model": "",
+                "tokens_used": 500,
+                "cached_prompt_tokens": 0,
+                "processing_time": 4.0,
+                "is_public": True,
+            },
+            {
+                "source": "s3://b/c.mp4",
+                "cosmos_model": "other-model",
+                "embedding_model": "text-model-b",
+                "tokens_used": 0,
+                "processing_time": 0,
+                "is_public": True,
+            },
+            {
+                "source": "s3://b/d.mp4",
+                "cosmos_model": "",
+                "tokens_used": 10,
+                "processing_time": 1.5,
+                "is_public": True,
+            },
+            {
+                "source": "s3://b/e.mp4",
+                "cosmos_model": "",
+                "tokens_used": 0,
+                "processing_time": 9.0,
+                "embedding_model": "",
+                "is_public": True,
+            },
+        ]
+        models = build_dashboard_stats(rows)["models"]
+        self.assertEqual(models["reasoner_calls"], 4)
+        self.assertEqual(models["token_total"], 1510)
+        self.assertEqual(models["token_avg"], 377.5)
+        self.assertEqual(models["cached_tokens"], 200)
 
     def test_attach_s3_inventory_alignment(self):
         payload = build_dashboard_stats(

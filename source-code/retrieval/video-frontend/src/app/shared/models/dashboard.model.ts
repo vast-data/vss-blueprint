@@ -61,6 +61,42 @@ export interface DashboardQuality {
   with_object_classes_pct: number;
 }
 
+export interface DashboardModels {
+  reasoner_calls: number;
+  token_total: number;
+  token_avg: number;
+  cached_tokens: number;
+}
+
+export type LiveEndpointStatus = 'ready' | 'busy' | 'down' | 'unavailable';
+
+export interface LiveEndpoint {
+  name: string;
+  label: string;
+  status: LiveEndpointStatus | string;
+  model: string;
+  detail?: string | null;
+  running?: number | null;
+  waiting?: number | null;
+  cache_pct?: number | null;
+  avg_latency_sec?: number | null;
+  gpu_memory_pct?: number | null;
+  gpu_util_pct?: number | null;
+  ttft_sec?: number | null;
+  prefill_sec?: number | null;
+  decode_sec?: number | null;
+  finished?: number | null;
+  cut_off?: number | null;
+  failed?: number | null;
+  metrics_available: boolean;
+}
+
+export interface LiveEndpoints {
+  probed_at: string;
+  reasoner: LiveEndpoint;
+  embed: LiveEndpoint;
+}
+
 export interface RecentVideoItem {
   original_video: string;
   filename: string;
@@ -90,6 +126,8 @@ export interface DashboardStatsResponse {
   scope: string;
   overview: DashboardOverview;
   quality: DashboardQuality;
+  models?: DashboardModels | null;
+  live_endpoints?: LiveEndpoints | null;
   objects: ObjectStatItem[];
   metadata: Record<string, CountItem[]>;
   uploads_by_day: UploadDayItem[];
