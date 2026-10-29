@@ -22,6 +22,7 @@ from src.services.vastdb_service import get_vastdb_service
 from src.config import get_settings
 from src.schemas.explore import (
     ExploreResponse,
+    ParentDeleteResponse,
     VideoDeleteResponse,
     VideoSynthesizeRequest,
     VideoSynthesizeResponse,
@@ -424,17 +425,8 @@ Rules:
 - Stay under ~250 words unless the user question requires more detail."""
 
 
-@router.delete("", response_model=VideoDeleteResponse)
-async def delete_video(
-    original_video: str = Query(..., min_length=1, description="Parent upload S3 URI"),
-    current_user: CurrentUser = None,
-):
-    """
-    Delete one explore video: source object, segments, detection sidecars,
-    collection rows, and prompt/event rows.
-
-    Only the uploader (allowed_users, or the S3 key prefix) can delete it.
-    """
+def delete_one_video(username: str, original_video: str, *, clear_cache: bool = True) -> VideoDeleteResponse:
+    """Delete one chunk: source object, segments, detection files, and index rows."""
     from src.utils.row_cache import clear_read_caches
     from src.utils.video_delete import (
         allowed_delete_buckets,
@@ -443,7 +435,7 @@ async def delete_video(
     )
 
     parent = original_video.strip()
-    logger.info("Delete request from %s: video='%s'", current_user.username, parent)
+    logger.info("Delete request from %s: video='%s'", username, parent)
     vastdb = get_vastdb_service()
     try:
         rows = vastdb.rows_for_video_delete(parent)
@@ -458,7 +450,7 @@ async def delete_video(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Video not found",
         )
-    if not user_can_delete_video(current_user.username, parent, rows):
+    if not user_can_delete_video(username, parent, rows):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only delete videos you uploaded",
@@ -505,7 +497,8 @@ async def delete_video(
         objects_deleted += deleted
         object_errors.extend(errors)
 
-    clear_read_caches()
+    if clear_cache:
+        clear_read_caches()
     logger.info(
         "Deleted %s: segments=%s prompts=%s objects=%s errors=%s",
         parent,
@@ -516,6 +509,89 @@ async def delete_video(
     )
     return VideoDeleteResponse(
         original_video=parent,
+        segments_deleted=segments_deleted,
+        prompts_deleted=prompts_deleted,
+        objects_deleted=objects_deleted,
+        object_errors=object_errors,
+    )
+
+
+@router.delete("", response_model=VideoDeleteResponse)
+async def delete_video(
+    original_video: str = Query(..., min_length=1, description="Parent upload S3 URI"),
+    current_user: CurrentUser = None,
+):
+    """
+    Delete one explore video: source object, segments, detection sidecars,
+    collection rows, and prompt/event rows.
+
+    Only the uploader (allowed_users, or the S3 key prefix) can delete it.
+    """
+    return await asyncio.to_thread(delete_one_video, current_user.username, original_video)
+
+
+@router.delete("/parent", response_model=ParentDeleteResponse)
+async def delete_parent(
+    stream_id: str = Query(..., min_length=1),
+    scope: str = Query(default="all", pattern="^(all|mine|public)$"),
+    current_user: CurrentUser = None,
+):
+    """Delete every chunk of one capture. Uses the same delete as a single chunk."""
+    return await asyncio.to_thread(
+        _delete_parent_stream,
+        current_user,
+        stream_id,
+        scope,
+    )
+
+
+def _delete_parent_stream(current_user, stream_id: str, scope: str) -> ParentDeleteResponse:
+    from src.utils.row_cache import clear_read_caches
+
+    vastdb = get_vastdb_service()
+    videos = vastdb.original_videos_for_stream(current_user, stream_id, scope)
+    if not videos:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Capture not found")
+
+    from src.utils.video_delete import user_can_delete_video
+
+    authorized: list[str] = []
+    for parent in videos:
+        try:
+            rows = vastdb.rows_for_video_delete(parent)
+        except Exception as exc:
+            logger.error("Failed to load rows for delete %s: %s", parent, exc)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to load video rows: {exc}",
+            )
+        if not rows:
+            continue
+        if not user_can_delete_video(current_user.username, parent, rows):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete videos you uploaded",
+            )
+        authorized.append(parent)
+    if not authorized:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Capture not found")
+
+    segments_deleted = 0
+    prompts_deleted = 0
+    objects_deleted = 0
+    object_errors: list[str] = []
+    try:
+        for parent in authorized:
+            result = delete_one_video(current_user.username, parent, clear_cache=False)
+            segments_deleted += result.segments_deleted
+            prompts_deleted += result.prompts_deleted
+            objects_deleted += result.objects_deleted
+            object_errors.extend(result.object_errors)
+    finally:
+        clear_read_caches()
+    return ParentDeleteResponse(
+        stream_id=stream_id,
+        chunks_deleted=len(authorized),
         segments_deleted=segments_deleted,
         prompts_deleted=prompts_deleted,
         objects_deleted=objects_deleted,

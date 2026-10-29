@@ -180,6 +180,15 @@ export interface VideoDeleteResponse {
   object_errors: string[];
 }
 
+export interface ParentDeleteResponse {
+  stream_id: string;
+  chunks_deleted: number;
+  segments_deleted: number;
+  prompts_deleted: number;
+  objects_deleted: number;
+  object_errors: string[];
+}
+
 export interface VideoSynthesizeRequest {
   original_video: string;
   question?: string;

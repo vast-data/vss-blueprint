@@ -794,7 +794,7 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
   }
 
   openChunk(chunk: ChunkSearchResult, seekSec?: number) {
-    this.dialog.open(VideoPlayerComponent, {
+    const ref = this.dialog.open(VideoPlayerComponent, {
       data: {
         chunk,
         query: '',
@@ -806,6 +806,15 @@ export class ExplorePageComponent implements OnInit, OnDestroy {
       maxWidth: '1100px',
       height: '92vh',
       panelClass: 'video-player-dialog',
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (!result?.deleted) return;
+      if (result.objectErrors?.length) {
+        this.deleteError.set(
+          `Deleted the capture, but some files could not be removed: ${result.objectErrors.join('; ')}`,
+        );
+      }
+      this.load();
     });
   }
 

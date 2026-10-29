@@ -5,6 +5,7 @@ import { environment } from '../../../../environments/environment';
 import {
   ChunkSearchResult,
   ExploreResponse,
+  ParentDeleteResponse,
   VideoDeleteResponse,
   VideoScope,
   VideoSynthesizeRequest,
@@ -65,5 +66,10 @@ export class ExploreService {
   deleteVideo(originalVideo: string): Observable<VideoDeleteResponse> {
     const params = new HttpParams().set('original_video', originalVideo);
     return this.http.delete<VideoDeleteResponse>(`${environment.apiUrl}/videos`, { params });
+  }
+
+  deleteParent(streamId: string, scope: VideoScope = 'all'): Observable<ParentDeleteResponse> {
+    const params = new HttpParams().set('stream_id', streamId).set('scope', scope);
+    return this.http.delete<ParentDeleteResponse>(`${environment.apiUrl}/videos/parent`, { params });
   }
 }
