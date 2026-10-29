@@ -81,7 +81,9 @@ import { playHoverPreview, stopHoverPreview, claimHoverPreview, releaseHoverPrev
       <mat-card-content>
         <div class="title-row">
           <h3 class="chunk-title" [class.explore-title]="mode === 'explore'">{{ chunk.filename }}</h3>
-          <span class="duration-chip">{{ formatTime(chunk.chunk_duration_sec) }}</span>
+          @if (mode !== 'explore') {
+            <span class="duration-chip">{{ formatTime(chunk.chunk_duration_sec) }}</span>
+          }
         </div>
 
         @if (mode === 'search') {
@@ -94,24 +96,22 @@ import { playHoverPreview, stopHoverPreview, claimHoverPreview, releaseHoverPrev
             }
           </p>
         } @else {
-          <p class="match-line explore-line">
-            <mat-icon>movie</mat-icon>
-            @if (chunk.chunk_index != null) {
-              Chunk {{ chunk.chunk_index + 1 }}@if (chunk.stream_chunk_total) {/{{ chunk.stream_chunk_total }}}
-              · {{ formatTime(chunk.chunk_duration_sec) }}
-              ·
-              @if (chunk.timeline.length < chunk.total_segments) {
-                {{ chunk.timeline.length }} of {{ chunk.total_segments }} segments
-              } @else {
-                {{ chunk.total_segments }} segment{{ chunk.total_segments === 1 ? '' : 's' }}
-              }
-            } @else if (chunk.timeline.length < chunk.total_segments) {
-              {{ chunk.timeline.length }} of {{ chunk.total_segments }} segments indexed
-            } @else {
-              {{ chunk.total_segments }} segment{{ chunk.total_segments === 1 ? '' : 's' }}
-              · {{ formatTime(chunk.chunk_duration_sec) }} total
+          <div class="explore-badges">
+            @if (exploreChunkLabel(); as chunkLabel) {
+              <span class="meta-badge chunk" matTooltip="Position in this capture">
+                <span class="badge-k">Chunk</span>
+                <span class="badge-v">{{ chunkLabel }}</span>
+              </span>
             }
-          </p>
+            <span class="meta-badge time" matTooltip="Chunk length">
+              <span class="badge-k">Time</span>
+              <span class="badge-v">{{ formatTime(chunk.chunk_duration_sec) }}</span>
+            </span>
+            <span class="meta-badge segs" [matTooltip]="exploreSegmentTip()">
+              <span class="badge-k">Segments</span>
+              <span class="badge-v">{{ exploreSegmentLabel() }}</span>
+            </span>
+          </div>
         }
 
         @if (chunk.timeline?.length) {
@@ -340,8 +340,10 @@ import { playHoverPreview, stopHoverPreview, claimHoverPreview, releaseHoverPrev
 
     .chunk-title {
       margin: 0;
-      font-size: 1rem;
-      font-weight: 600;
+      font-family: var(--font-name);
+      font-size: 0.8rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
       color: var(--text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -350,7 +352,8 @@ import { playHoverPreview, stopHoverPreview, claimHoverPreview, releaseHoverPrev
     }
 
     .chunk-title.explore-title {
-      font-size: 1.28rem;
+      font-size: 1.024rem;
+      font-weight: 400;
     }
 
     .duration-chip {
@@ -371,21 +374,58 @@ import { playHoverPreview, stopHoverPreview, claimHoverPreview, releaseHoverPrev
       strong { color: #22c55e; }
       .multi-hit { color: var(--text-muted); }
 
-      &.explore-line {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 1.08rem;
-        font-weight: 600;
-        color: var(--text-primary);
+    }
 
-        mat-icon {
-          font-size: 1rem;
-          width: 1rem;
-          height: 1rem;
-          color: var(--accent-primary);
-        }
+    .explore-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin: 0 0 0.75rem;
+    }
+
+    .meta-badge {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      padding: 0.28rem 0.55rem 0.24rem;
+      border-radius: 7px;
+      background:
+        linear-gradient(180deg, rgba(115, 200, 253, 0.16), rgba(115, 200, 253, 0.04));
+      border: 1px solid rgba(115, 200, 253, 0.32);
+      box-shadow: inset 0 0 14px rgba(115, 200, 253, 0.06);
+
+      &.time {
+        background: linear-gradient(180deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.04));
+        border-color: rgba(148, 163, 184, 0.32);
+        box-shadow: none;
       }
+
+      &.segs {
+        background: linear-gradient(180deg, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.04));
+        border-color: rgba(34, 197, 94, 0.35);
+        box-shadow: inset 0 0 14px rgba(34, 197, 94, 0.05);
+      }
+    }
+
+    .badge-k {
+      font-family: var(--font-name);
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(186, 214, 232, 0.78);
+    }
+
+    .meta-badge.chunk .badge-k { color: #8fd4ff; }
+    .meta-badge.segs .badge-k { color: #86efac; }
+
+    .badge-v {
+      font-family: var(--font-name);
+      font-size: 0.95rem;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      color: #f4fbff;
     }
 
     .timeline-section {
@@ -762,6 +802,30 @@ export class ChunkCardComponent implements OnChanges {
   toggleExpand(event: Event) {
     event.stopPropagation();
     this.isExpanded = !this.isExpanded;
+  }
+
+  exploreChunkLabel(): string | null {
+    const idx = this.chunk.chunk_index;
+    if (idx == null || idx < 0) return null;
+    const total = this.chunk.stream_chunk_total;
+    if (total != null && total > 0) return `${idx + 1}/${total}`;
+    return `${idx + 1}`;
+  }
+
+  exploreSegmentLabel(): string {
+    const total = this.chunk.total_segments;
+    const indexed = this.chunk.timeline?.length ?? 0;
+    if (indexed > 0 && indexed < total) return `${indexed}/${total}`;
+    return `${total}`;
+  }
+
+  exploreSegmentTip(): string {
+    const total = this.chunk.total_segments;
+    const indexed = this.chunk.timeline?.length ?? 0;
+    if (indexed > 0 && indexed < total) {
+      return `${indexed} of ${total} segments indexed`;
+    }
+    return total === 1 ? '1 segment' : `${total} segments`;
   }
 
   onStreamHop(event: Event, direction: 'prev' | 'next') {

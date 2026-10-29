@@ -1,6 +1,7 @@
 """
 Semantic video search API endpoints
 """
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, status, Depends
 from src.schemas.search import VideoSearchRequest, VideoSearchResponse
@@ -74,6 +75,13 @@ async def search_videos(
 
         chunk_results = vastdb_service.group_results_by_chunk(
             results, current_user, request.query, request.top_k
+        )
+        chunk_results = await asyncio.to_thread(
+            vastdb_service.attach_stream_siblings,
+            chunk_results,
+            current_user,
+            request.include_public,
+            request.public_only,
         )
 
         logger.info(

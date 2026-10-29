@@ -420,7 +420,7 @@ interface DashboardKpiCard {
                       <td class="col-time" [matTooltip]="formatTimestamp(ev.upload_timestamp)">
                         {{ formatKeyEventUploaded(ev) }}
                       </td>
-                      <td class="col-muted" [matTooltip]="ev.filename || ev.original_video">
+                      <td class="col-muted col-name" [matTooltip]="ev.filename || ev.original_video">
                         {{ truncate(ev.filename || ev.original_video, 32) }}
                       </td>
                     </tr>
@@ -475,7 +475,7 @@ interface DashboardKpiCard {
                     <tr>
                       <td class="col-video">
                         <mat-icon class="row-icon">{{ row.stream_id ? 'live_tv' : 'movie' }}</mat-icon>
-                        <span [matTooltip]="row.original_video">{{ truncate(row.filename, 36) }}</span>
+                        <span class="col-name" [matTooltip]="row.original_video">{{ truncate(row.filename, 36) }}</span>
                       </td>
                       <td>
                         <span class="seg-count">{{ row.indexed_clips ?? row.unique_segments }}</span>
@@ -1233,6 +1233,13 @@ interface DashboardKpiCard {
       gap: 0.5rem;
       font-weight: 500;
       min-width: 10rem;
+    }
+
+    .col-name {
+      font-family: var(--font-name);
+      font-size: 0.672rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
     }
 
     .row-icon {

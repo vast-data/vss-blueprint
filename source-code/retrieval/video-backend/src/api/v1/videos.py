@@ -539,8 +539,12 @@ async def get_stream_chunk(
         scope,
     )
     try:
-        chunk = get_vastdb_service().get_stream_chunk(
-            current_user, stream_id, chunk_index, scope=scope
+        chunk = await asyncio.to_thread(
+            get_vastdb_service().get_stream_chunk,
+            current_user,
+            stream_id,
+            chunk_index,
+            scope,
         )
     except Exception as exc:
         logger.error("Failed to load stream chunk %s #%s: %s", stream_id, chunk_index, exc)

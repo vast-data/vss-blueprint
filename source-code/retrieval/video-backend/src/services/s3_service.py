@@ -393,8 +393,19 @@ class S3Service:
 
     def head_object_for_stream(self, bucket: str, key: str) -> S3ObjectStreamMeta:
         """
-        Single HEAD for stream path: size, Content-Type (for correct MIME), ETag (caching / 304).
+        Size, Content-Type, and ETag for a stream. Kept briefly so later range
+        requests for the same object skip another HEAD.
         """
+        from src.utils.row_cache import STREAM_HEAD_TTL_SEC, cached_stream_head
+
+        return cached_stream_head(
+            bucket,
+            key,
+            STREAM_HEAD_TTL_SEC,
+            lambda: self._load_stream_head(bucket, key),
+        )
+
+    def _load_stream_head(self, bucket: str, key: str) -> S3ObjectStreamMeta:
         try:
             response = self.client.head_object(Bucket=bucket, Key=key)
             ct = response.get("ContentType") or "video/mp4"

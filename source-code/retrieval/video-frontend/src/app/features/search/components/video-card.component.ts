@@ -209,8 +209,10 @@ import { playHoverPreview, stopHoverPreview, claimHoverPreview, releaseHoverPrev
 
     .video-title {
       color: var(--text-primary);
-      font-size: 1rem;
-      font-weight: 600;
+      font-family: var(--font-name);
+      font-size: 0.8rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
       margin: 0 0 1rem 0;
       overflow: hidden;
       text-overflow: ellipsis;

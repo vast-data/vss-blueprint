@@ -39,6 +39,7 @@ $my-theme: mat.m2-define-light-theme((
   --text-primary: #e8ebec; /* gray-50 - primary text */
   --text-secondary: #c5ccce; /* gray-200 - secondary text */
   --text-muted: #a2aeb4; /* gray-400 - muted text */
+  --font-name: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   
   /* Accent Colors - from tokens */
   --accent-primary: #73c8fd; /* lightblue-400 - actions, click feedback, hyperlinks */

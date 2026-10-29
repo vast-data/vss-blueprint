@@ -87,7 +87,10 @@ export interface VideoSummarizeDialogData {
       p {
         margin: 0.25rem 0 0;
         color: var(--text-secondary);
-        font-size: 0.9rem;
+        font-family: var(--font-name);
+        font-size: 0.72rem;
+        font-weight: 400;
+        letter-spacing: 0.01em;
       }
     }
 
