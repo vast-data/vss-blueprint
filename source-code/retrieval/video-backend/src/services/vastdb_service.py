@@ -1830,6 +1830,24 @@ class VastDBService:
             logger.error(f"[DISTINCT] Error getting distinct values for {column_name}: {e}")
             return []
 
+    def original_videos_for_stream(self, user: User, stream_id: str, scope: str = "all") -> List[str]:
+        """Chunk uploads that belong to one capture, in chunk order."""
+        include_public = scope in ("all", "public")
+        public_only = scope == "public"
+        raw_rows = self._fetch_dashboard_rows_sdk()
+        rows_by_video, _by_video = group_accessible_rows(
+            raw_rows,
+            lambda row: self._user_has_access(row, user, include_public, public_only),
+        )
+        wanted = (stream_id or "").strip()
+        found = [
+            (int(meta["chunk_index"]), ov)
+            for ov, meta in build_stream_meta_by_video(rows_by_video).items()
+            if str(meta.get("stream_id") or "") == wanted
+        ]
+        found.sort()
+        return [ov for _index, ov in found]
+
     def rows_for_video_delete(self, original_video: str) -> List[dict]:
         """Segment rows needed to authorize and clean one parent upload."""
         with self.client.transaction() as tx:

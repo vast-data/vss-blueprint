@@ -29,7 +29,6 @@ import {
 import {
   claimHoverPreview,
   playHoverPreview,
-  playVideoMuted,
   releaseHoverPreview,
   seekVideoAndWait,
   stopHoverPreview,
@@ -109,6 +108,19 @@ export interface VideoPlayerData {
       @if (chunk(); as c) {
         @if ((c.stream_id && streamChunkIndexes(c).length) || isExplore()) {
         <div class="explore-actions-bar">
+          @if (isExplore() && c.stream_id && streamChunkIndexes(c).length) {
+            <div class="parent-delete-row">
+              <button
+                mat-stroked-button
+                type="button"
+                class="delete-parent-btn"
+                [disabled]="deletingParent()"
+                (click)="deleteParent()">
+                <mat-icon>delete_forever</mat-icon>
+                Delete all chunks
+              </button>
+            </div>
+          }
           @if (c.stream_id && streamChunkIndexes(c).length) {
             <div class="chunk-timeline" #chunkTimeline>
               <div class="timeline-header">
@@ -185,14 +197,23 @@ export interface VideoPlayerData {
               controls
               playsinline
               preload="auto"
-              muted
+              [muted]="muted()"
               (loadedmetadata)="onLoadedMetadata()"
               (canplay)="onCanPlay()"
               (playing)="onVideoPlaying()"
               (timeupdate)="onTimeUpdate()"
+              (volumechange)="onVolumeChange()"
+              (ended)="onVideoEnded()"
               (error)="onVideoError($event)"
               class="video-player">
             </video>
+            <button
+              type="button"
+              class="mute-btn"
+              (click)="toggleMute()"
+              [matTooltip]="muted() ? 'Unmute' : 'Mute'">
+              <mat-icon>{{ muted() ? 'volume_off' : 'volume_up' }}</mat-icon>
+            </button>
             @if (overlayEnabled()) {
               <canvas #overlayCanvas class="detection-overlay"></canvas>
             }
@@ -359,6 +380,20 @@ export interface VideoPlayerData {
       border-bottom: 1px solid rgba(115, 200, 253, 0.22);
     }
 
+    .parent-delete-row {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .delete-parent-btn {
+      color: #f87171 !important;
+      border-color: rgba(248, 113, 113, 0.55) !important;
+
+      mat-icon {
+        color: #f87171 !important;
+      }
+    }
+
     .chunk-timeline {
       position: relative;
       width: 100%;
@@ -420,16 +455,25 @@ export interface VideoPlayerData {
       font-weight: 400;
     }
 
-    .chunk-track {
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: thin;
-    }
-
     .chunk-track .timeline-seg {
-      flex: 1 0 2.25rem;
-      min-width: 2.25rem;
-      max-width: 4.5rem;
+      flex: 0 0 3rem;
+      width: 3rem;
+      height: 3rem;
+      min-width: 3rem;
+      max-width: 3rem;
+      border-radius: 8px;
+
+      &:hover {
+        transform: none;
+        background: rgba(115, 200, 253, 0.35);
+      }
+
+      .seg-num {
+        font-family: var(--font-name);
+        font-size: 0.75rem;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+      }
     }
 
     .chunk-track .timeline-seg.active {
@@ -473,6 +517,37 @@ export interface VideoPlayerData {
         object-fit: contain;
         display: block;
         vertical-align: top;
+
+        &::-webkit-media-controls-mute-button,
+        &::-webkit-media-controls-volume-slider,
+        &::-webkit-media-controls-volume-control-container {
+          display: none !important;
+        }
+      }
+
+      .mute-btn {
+        position: absolute;
+        z-index: 4;
+        top: 0.55rem;
+        right: 0.55rem;
+        width: 2.25rem;
+        height: 2.25rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.62);
+        color: #fff;
+        cursor: pointer;
+
+        mat-icon {
+          color: #fff;
+          font-size: 1.15rem;
+          width: 1.15rem;
+          height: 1.15rem;
+        }
       }
 
       .detection-overlay {
@@ -622,10 +697,34 @@ export interface VideoPlayerData {
     }
 
     .timeline-track.chunk-track {
-      height: 40px;
+      height: auto;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.4rem 0.45rem;
       overflow-x: auto;
       overflow-y: hidden;
+      scrollbar-gutter: stable;
       scrollbar-width: thin;
+      scrollbar-color: rgba(115, 200, 253, 0.55) transparent;
+      background: rgba(11, 18, 32, 0.28);
+
+      &::-webkit-scrollbar {
+        height: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+        margin: 0 0.4rem;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(115, 200, 253, 0.4);
+        border-radius: 999px;
+      }
+
+      &::-webkit-scrollbar-thumb:hover {
+        background: rgba(115, 200, 253, 0.7);
+      }
     }
 
     .timeline-seg {
@@ -811,6 +910,7 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('chunkHoverVideo') chunkHoverVideo?: ElementRef<HTMLVideoElement>;
 
   loading = signal(true);
+  muted = signal(true);
   error = signal<string | null>(null);
   streamUrl = signal<SafeResourceUrl | null>(null);
   currentTime = signal(0);
@@ -826,8 +926,10 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
   private playbackPrepared = false;
   /** Chunk timeline second where the loaded segment MP4 starts. */
   private segmentPlaybackOffset = 0;
+  private advancingSegment = false;
   /** Explore seek switches onto the parent chunk file after the first segment. */
   private playingChunkFile = false;
+  private syncingAudio = false;
   private pendingInlineSeekSec = 0;
   private loadedSegmentSource = '';
   private loadedDetectionSource = '';
@@ -835,6 +937,7 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
 
   streamHop = signal(false);
   streamHopError = signal<string | null>(null);
+  deletingParent = signal(false);
   chunkHover = signal<{ index: number; left: number; loading: boolean; failed: boolean } | null>(null);
   private chunkByIndex = new Map<number, ChunkSearchResult>();
   private hoverTimer = 0;
@@ -999,7 +1102,17 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onVideoPlaying() {
     this.loading.set(false);
+    this.advancingSegment = false;
     this.prefetchAhead();
+  }
+
+  onVideoEnded() {
+    if (this.advancingSegment || this.loading() || !this.isExplore() || this.playingChunkFile) return;
+    const chunk = this.chunk();
+    const next = chunk ? this.nextTimelineSegment(chunk) : undefined;
+    if (!next?.source?.trim()) return;
+    this.advancingSegment = true;
+    this.beginSegmentPlayback(chunk!, next.segment_start_sec);
   }
 
   private clearLoadingOverlay() {
@@ -1028,7 +1141,7 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
 
       this.playbackPrepared = true;
       this.autoPlayPending = false;
-      await playVideoMuted(el);
+      await this.playMain(el);
     } catch {
       // autoplay may be blocked
     } finally {
@@ -1115,6 +1228,33 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
     drawDetectionOverlay(canvas, video, frame);
   }
 
+  toggleMute() {
+    this.muted.update((value) => !value);
+    const el = this.videoPlayer?.nativeElement;
+    if (el) this.applyAudio(el);
+  }
+
+  onVolumeChange() {
+    if (this.syncingAudio) return;
+    const el = this.videoPlayer?.nativeElement;
+    if (!el) return;
+    const nativeMuted = el.muted || el.volume === 0;
+    if (nativeMuted !== this.muted()) this.muted.set(nativeMuted);
+    if (el.volume !== 1) this.applyAudio(el);
+  }
+
+  private applyAudio(el: HTMLVideoElement) {
+    this.syncingAudio = true;
+    el.muted = this.muted();
+    el.volume = 1;
+    this.syncingAudio = false;
+  }
+
+  private async playMain(el: HTMLVideoElement) {
+    this.applyAudio(el);
+    await el.play();
+  }
+
   onVideoError(event?: Event) {
     console.error('[VIDEO PLAYER]', event);
     this.error.set('Failed to load video. Please try again.');
@@ -1179,7 +1319,7 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
     try {
       await seekVideoAndWait(el, sec);
       afterSeek?.();
-      await playVideoMuted(el);
+      await this.playMain(el);
     } catch {
       // seek or autoplay failed
     } finally {
@@ -1443,16 +1583,16 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
     return null;
   }
 
+  private nextTimelineSegment(chunk: ChunkSearchResult): TimelineSegment | undefined {
+    const timeline = [...(chunk.timeline ?? [])].sort((a, b) => a.segment_number - b.segment_number);
+    const at = timeline.findIndex((seg) => (seg.source ?? '').trim() === this.loadedSegmentSource);
+    return at >= 0 ? timeline[at + 1] : undefined;
+  }
+
   private nextSourceToWarm(): string | null {
     const chunk = this.chunk();
     if (!chunk) return null;
-    if (this.isExplore() && !this.playingChunkFile) {
-      const chunkFile = chunk.original_video?.trim() || '';
-      if (chunkFile && chunkFile !== this.loadedSegmentSource) return chunkFile;
-    }
-    const timeline = [...(chunk.timeline ?? [])].sort((a, b) => a.segment_number - b.segment_number);
-    const at = timeline.findIndex((seg) => seg.source === this.loadedSegmentSource);
-    const nextSegment = at >= 0 ? timeline[at + 1]?.source?.trim() : '';
+    const nextSegment = this.nextTimelineSegment(chunk)?.source?.trim() ?? '';
     if (nextSegment && nextSegment !== this.loadedSegmentSource) return nextSegment;
     const index = chunk.chunk_index;
     if (index == null) return null;
@@ -1544,6 +1684,35 @@ export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
       maxHeight: '90vh',
       panelClass: 'video-summarize-dialog',
       data: { chunk: c },
+    });
+  }
+
+  deleteParent() {
+    const current = this.chunk();
+    const streamId = current?.stream_id?.trim();
+    const count = current ? this.streamChunkIndexes(current).length : 0;
+    if (!streamId || !count || this.deletingParent() || !this.isExplore()) return;
+    const confirmed = confirm(
+      `Delete all ${count} chunks of this capture? This removes every chunk, its segments, detection files, and index rows.`,
+    );
+    if (!confirmed) return;
+    this.onChunkHoverEnd();
+    this.videoPlayer?.nativeElement.pause();
+    this.deletingParent.set(true);
+    this.streamHopError.set(null);
+    this.explore.deleteParent(streamId, this.data.scope ?? 'all').subscribe({
+      next: (res) => {
+        this.deletingParent.set(false);
+        this.dialogRef.close({
+          deleted: true,
+          objectErrors: res.object_errors ?? [],
+        });
+      },
+      error: (err) => {
+        this.deletingParent.set(false);
+        const detail = err?.error?.detail;
+        this.streamHopError.set(typeof detail === 'string' ? detail : 'Delete failed');
+      },
     });
   }
 

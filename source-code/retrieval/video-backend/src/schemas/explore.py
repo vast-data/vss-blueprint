@@ -52,6 +52,15 @@ class VideoDeleteResponse(BaseModel):
     object_errors: List[str] = Field(default_factory=list)
 
 
+class ParentDeleteResponse(BaseModel):
+    stream_id: str
+    chunks_deleted: int
+    segments_deleted: int
+    prompts_deleted: int
+    objects_deleted: int
+    object_errors: List[str] = Field(default_factory=list)
+
+
 class VideoSynthesizeResponse(BaseModel):
     original_video: str
     segment_count: int
