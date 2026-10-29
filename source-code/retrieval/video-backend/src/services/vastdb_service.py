@@ -22,7 +22,7 @@ from src.utils.explore_index import (
     location_filter_options,
     uploads_by_day_counts,
 )
-from src.utils.stream_index import build_stream_meta_by_video
+from src.utils.stream_index import build_stream_meta_by_video, stream_identity
 from src.utils.segment_timeline import dedupe_by_segment_number, dedupe_segment_dicts
 
 # Import ADBC driver manager
@@ -282,6 +282,7 @@ class VastDBService:
                     object_counts,
                     max_detection_conf,
                     perception_ok,
+                    extra_metadata,
                     array_cosine_distance({vector_column}::FLOAT[{dimension}], ARRAY{query_embedding}::FLOAT[{dimension}]) as distance
                 FROM {table_path}
             """
@@ -760,10 +761,34 @@ class VastDBService:
                     cosmos_model=best.cosmos_model,
                     tokens_used=best.tokens_used,
                     cached_prompt_tokens=best.cached_prompt_tokens,
+                    **stream_identity({"extra_metadata": best.extra_metadata}),
                 )
             )
 
         return chunks
+
+    def attach_stream_siblings(
+        self,
+        chunks: List[ChunkSearchResult],
+        user: User,
+        include_public: bool = True,
+        public_only: bool = False,
+    ) -> List[ChunkSearchResult]:
+        """Fill parent-chunk indexes and first-segment files from the cached table read."""
+        if not chunks or not any(chunk.stream_id for chunk in chunks):
+            return chunks
+
+        raw_rows = self._fetch_dashboard_rows_sdk()
+        rows_by_video, _by_video = group_accessible_rows(
+            raw_rows,
+            lambda row: self._user_has_access(row, user, include_public, public_only),
+        )
+        stream_meta = build_stream_meta_by_video(rows_by_video)
+        attached: List[ChunkSearchResult] = []
+        for chunk in chunks:
+            extra = stream_meta.get(chunk.original_video)
+            attached.append(chunk.model_copy(update=extra) if extra else chunk)
+        return attached
 
     def _build_acl_sql_conditions(
         self,

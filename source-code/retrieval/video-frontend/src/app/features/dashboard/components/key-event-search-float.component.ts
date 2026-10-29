@@ -417,7 +417,10 @@ type FloatPhase = 'idle' | 'embedding' | 'searching' | 'player' | 'error';
     .filename {
       flex: 1;
       text-align: center;
-      font-size: 0.78rem;
+      font-family: var(--font-name);
+      font-size: 0.624rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
       color: var(--text-muted);
       overflow: hidden;
       text-overflow: ellipsis;

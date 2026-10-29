@@ -11,6 +11,7 @@ T = TypeVar("T")
 # Shared across requests in one backend worker process.
 ROW_CACHE_TTL_SEC = 45.0
 S3_COUNT_CACHE_TTL_SEC = 300.0
+STREAM_HEAD_TTL_SEC = 60.0
 DISTINCT_VALUES_CACHE_TTL_SEC = 120.0
 PROMPTS_CACHE_TTL_SEC = 60.0
 SUGGESTIONS_CACHE_TTL_SEC = 60.0
@@ -83,6 +84,11 @@ def cached_table_rows(cache_key: str, ttl_sec: float, loader: Callable[[], List[
 
 def cached_s3_mp4_count(bucket: str, ttl_sec: float, loader: Callable[[], int]) -> int:
     return _s3_cache.get_or_set(f"s3-mp4:{bucket}", ttl_sec, loader)
+
+
+def cached_stream_head(bucket: str, key: str, ttl_sec: float, loader: Callable[[], T]) -> T:
+    """Size and type for one object. Repeat range requests skip another HEAD."""
+    return _s3_cache.get_or_set(f"s3-head:{bucket}:{key}", ttl_sec, loader)
 
 
 def cached_distinct_values(

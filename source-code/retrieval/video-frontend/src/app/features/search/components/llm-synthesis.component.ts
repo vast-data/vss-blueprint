@@ -275,9 +275,10 @@ import { LLMSynthesis } from '../../../shared/models/video.model';
             color: var(--text-primary);
             padding: 0.4rem 0.75rem;
             border-radius: 8px;
-            font-size: 0.8rem;
+            font-size: 0.64rem;
+            font-weight: 400;
             border: 1px solid var(--border-color);
-            font-family: 'Roboto Mono', monospace;
+            font-family: var(--font-name);
             transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
           }
         }

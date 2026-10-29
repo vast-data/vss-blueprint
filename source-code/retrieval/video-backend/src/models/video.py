@@ -60,6 +60,12 @@ class TimelineSegment(BaseModel):
     is_best_match: bool = False
 
 
+class StreamChunkPreview(BaseModel):
+    """First segment file of one chunk in a capture."""
+    chunk_index: int
+    source: str
+
+
 class ChunkSearchResult(BaseModel):
     """Search hit grouped by uploaded video (original_video)."""
     original_video: str
@@ -87,5 +93,7 @@ class ChunkSearchResult(BaseModel):
     stream_id: Optional[str] = None
     chunk_index: Optional[int] = None
     stream_chunk_total: Optional[int] = None
+    stream_chunk_indices: Optional[List[int]] = None
+    stream_chunk_previews: Optional[List[StreamChunkPreview]] = None
     prev_chunk_index: Optional[int] = None
     next_chunk_index: Optional[int] = None

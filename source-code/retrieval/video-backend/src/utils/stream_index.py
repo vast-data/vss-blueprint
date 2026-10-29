@@ -58,6 +58,16 @@ def format_stream_time(sec: Optional[float]) -> str:
     return f"{m}:{s:02d}"
 
 
+def stream_identity(row: dict) -> Dict[str, Any]:
+    """stream_id and chunk_index for one indexed video, or {} when it is not a chunk."""
+    fields = stream_fields_from_row(row)
+    stream_id = str(fields.get("stream_id") or "").strip()
+    chunk_index = _parse_chunk_index(fields.get("chunk_index"))
+    if not stream_id or chunk_index is None:
+        return {}
+    return {"stream_id": stream_id, "chunk_index": chunk_index}
+
+
 def _parse_chunk_index(raw: Any) -> Optional[int]:
     if raw is None or raw == "":
         return None
@@ -71,7 +81,9 @@ def build_stream_meta_by_video(rows_by_video: Dict[str, List[dict]]) -> Dict[str
     """
     Per original_video stream labels for explore cards.
 
-    Values: stream_id, chunk_index (0-based), stream_chunk_total (1-based session size).
+    Values: stream_id, chunk_index (0-based), stream_chunk_total (1-based session size),
+    stream_chunk_indices (every indexed chunk in that capture, sorted),
+    stream_chunk_previews (first segment file of each of those chunks).
     """
     session_max: Dict[str, int] = defaultdict(int)
     pending: Dict[str, Dict[str, Any]] = {}
@@ -88,7 +100,11 @@ def build_stream_meta_by_video(rows_by_video: Dict[str, List[dict]]) -> Dict[str
             if idx is not None:
                 chunk_index = idx
         if stream_id and chunk_index is not None:
-            pending[ov] = {"stream_id": stream_id, "chunk_index": chunk_index}
+            pending[ov] = {
+                "stream_id": stream_id,
+                "chunk_index": chunk_index,
+                "source": _first_segment_source(rows),
+            }
             session_max[stream_id] = max(session_max[stream_id], chunk_index + 1)
 
     by_stream: Dict[str, List[tuple]] = defaultdict(list)
@@ -99,12 +115,39 @@ def build_stream_meta_by_video(rows_by_video: Dict[str, List[dict]]) -> Dict[str
     for ov, meta in pending.items():
         sid = str(meta["stream_id"])
         idx = int(meta["chunk_index"])
-        lower = [i for i, other in by_stream[sid] if other != ov and i < idx]
-        higher = [i for i, other in by_stream[sid] if other != ov and i > idx]
+        siblings = by_stream[sid]
+        lower = [i for i, other in siblings if other != ov and i < idx]
+        higher = [i for i, other in siblings if other != ov and i > idx]
+        previews = []
+        for sibling_index, sibling_ov in sorted(siblings, key=lambda item: int(item[0])):
+            source = str(pending[sibling_ov].get("source") or "").strip()
+            if source:
+                previews.append({"chunk_index": int(sibling_index), "source": source})
         labeled[ov] = {
-            **meta,
+            "stream_id": meta["stream_id"],
+            "chunk_index": meta["chunk_index"],
             "stream_chunk_total": session_max[sid],
+            "stream_chunk_indices": sorted({int(i) for i, _other in siblings}),
+            "stream_chunk_previews": previews,
             "prev_chunk_index": max(lower) if lower else None,
             "next_chunk_index": min(higher) if higher else None,
         }
     return labeled
+
+
+def _first_segment_source(rows: List[dict]) -> str:
+    """Stored file for the earliest segment of one chunk."""
+    chosen = ""
+    chosen_number: Optional[int] = None
+    for row in rows:
+        source = str(row.get("source") or "").strip()
+        if not source:
+            continue
+        try:
+            number = int(row.get("segment_number") or 0)
+        except (TypeError, ValueError):
+            number = 0
+        if chosen_number is None or number < chosen_number:
+            chosen = source
+            chosen_number = number
+    return chosen

@@ -13,6 +13,11 @@ export interface TimelineSegment {
   is_best_match: boolean;
 }
 
+export interface StreamChunkPreview {
+  chunk_index: number;
+  source: string;
+}
+
 export interface ChunkSearchResult {
   original_video: string;
   filename: string;
@@ -39,6 +44,10 @@ export interface ChunkSearchResult {
   stream_id?: string | null;
   chunk_index?: number | null;
   stream_chunk_total?: number | null;
+  /** Indexed chunk positions in this capture, 0-based, sorted. */
+  stream_chunk_indices?: number[] | null;
+  /** First segment file of each chunk in this capture. */
+  stream_chunk_previews?: StreamChunkPreview[] | null;
   prev_chunk_index?: number | null;
   next_chunk_index?: number | null;
 }

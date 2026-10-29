@@ -1,6 +1,8 @@
 import {
+  AfterViewInit,
   Component,
   Inject,
+  OnDestroy,
   OnInit,
   ViewChild,
   ElementRef,
@@ -24,7 +26,14 @@ import {
   parseObjectChips,
   segmentDisplayCaption,
 } from '../../shared/utils/query-highlight.util';
-import { playVideoMuted, seekVideoAndWait } from '../../shared/utils/video-hover-preview.util';
+import {
+  claimHoverPreview,
+  playHoverPreview,
+  playVideoMuted,
+  releaseHoverPreview,
+  seekVideoAndWait,
+  stopHoverPreview,
+} from '../../shared/utils/video-hover-preview.util';
 import {
   DetectionFrame,
   DetectionSidecar,
@@ -36,7 +45,7 @@ import {
 import { VideoSummarizeDialogComponent } from '../explore/components/video-summarize-dialog.component';
 import { ExploreService } from '../explore/services/explore.service';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 
 export interface VideoPlayerData {
   chunk?: ChunkSearchResult;
@@ -97,42 +106,66 @@ export interface VideoPlayerData {
         </button>
       </div>
 
-      @if (isExplore() && chunk(); as c) {
+      @if (chunk(); as c) {
+        @if ((c.stream_id && streamChunkIndexes(c).length) || isExplore()) {
         <div class="explore-actions-bar">
-          @if (c.stream_id) {
-            <div class="stream-hop">
-              <button
-                mat-stroked-button
-                type="button"
-                class="stream-nav-btn"
-                (click)="hopStream('prev')"
-                [disabled]="c.prev_chunk_index == null || streamHop()">
-                <mat-icon>skip_previous</mat-icon>
-                Previous
-              </button>
-              @if (c.chunk_index != null) {
-                <span class="stream-chunk-label">
-                  Chunk {{ c.chunk_index + 1 }}@if (c.stream_chunk_total) {/{{ c.stream_chunk_total }}}
+          @if (c.stream_id && streamChunkIndexes(c).length) {
+            <div class="chunk-timeline" #chunkTimeline>
+              <div class="timeline-header">
+                <div class="timeline-title">
+                  <mat-icon>view_timeline</mat-icon>
+                  <span>Chunks</span>
+                </div>
+                <span class="playhead">
+                  {{ (c.chunk_index ?? 0) + 1 }} / {{ c.stream_chunk_total || streamChunkIndexes(c).length }}
                 </span>
+              </div>
+              <div class="timeline-track chunk-track" #chunkTrack>
+                @for (index of streamChunkIndexes(c); track index) {
+                  <button
+                    type="button"
+                    class="timeline-seg"
+                    [class.active]="c.chunk_index === index"
+                    (mouseenter)="onChunkHoverStart($event, index)"
+                    (mouseleave)="onChunkHoverEnd()"
+                    (click)="hopToChunk(index)">
+                    <span class="seg-num">{{ index + 1 }}</span>
+                  </button>
+                }
+              </div>
+              @if (chunkHover(); as hover) {
+                <div class="chunk-hover-preview" [style.left.px]="hover.left">
+                  <span class="chunk-hover-label">Chunk {{ hover.index + 1 }} · first segment</span>
+                  <div class="chunk-hover-frame">
+                    @if (hover.loading) {
+                      <div class="chunk-hover-status">
+                        <mat-spinner diameter="26"></mat-spinner>
+                      </div>
+                    } @else if (hover.failed) {
+                      <div class="chunk-hover-status">No preview</div>
+                    }
+                    <video
+                      #chunkHoverVideo
+                      muted
+                      playsinline
+                      class="chunk-hover-video"
+                      [class.hidden]="hover.loading || hover.failed">
+                    </video>
+                  </div>
+                </div>
               }
-              <button
-                mat-stroked-button
-                type="button"
-                class="stream-nav-btn"
-                (click)="hopStream('next')"
-                [disabled]="c.next_chunk_index == null || streamHop()">
-                Next
-                <mat-icon>skip_next</mat-icon>
-              </button>
             </div>
           }
-          <button mat-raised-button color="primary" class="summarize-btn" (click)="summarizeVideo()">
-            <mat-icon>auto_awesome</mat-icon>
-            Summarize Video
-          </button>
+          @if (isExplore()) {
+            <button mat-raised-button color="primary" class="summarize-btn" (click)="summarizeVideo()">
+              <mat-icon>auto_awesome</mat-icon>
+              Summarize Video
+            </button>
+          }
         </div>
         @if (streamHopError()) {
           <p class="stream-hop-error">{{ streamHopError() }}</p>
+        }
         }
       }
 
@@ -296,8 +329,10 @@ export interface VideoPlayerData {
 
       h2 {
         margin: 0;
-        font-size: 1.45rem;
-        font-weight: 650;
+        font-family: var(--font-name);
+        font-size: 1.16rem;
+        font-weight: 400;
+        letter-spacing: 0.01em;
         max-width: 720px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -317,49 +352,88 @@ export interface VideoPlayerData {
     .explore-actions-bar {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
       gap: 0.75rem;
       padding: 0.85rem 1rem;
       background: rgba(115, 200, 253, 0.08);
       border-bottom: 1px solid rgba(115, 200, 253, 0.22);
     }
 
-    .stream-hop {
+    .chunk-timeline {
+      position: relative;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .chunk-hover-preview {
+      position: absolute;
+      z-index: 8;
+      top: calc(100% + 8px);
+      width: 220px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      background: #0b1220;
+      border: 1px solid rgba(115, 200, 253, 0.45);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    }
+
+    .chunk-hover-label {
+      display: block;
+      padding: 0.32rem 0.55rem 0.2rem;
+      font-family: var(--font-name);
+      font-size: 0.66rem;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #8fd4ff;
+    }
+
+    .chunk-hover-frame {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: #000;
+    }
+
+    .chunk-hover-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+
+      &.hidden {
+        opacity: 0;
+      }
+    }
+
+    .chunk-hover-status {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 1.25rem;
-      width: 100%;
-      margin: 0;
+      color: rgba(244, 251, 255, 0.75);
+      font-family: var(--font-name);
+      font-size: 0.72rem;
+      font-weight: 400;
     }
 
-    .stream-chunk-label {
-      min-width: 9rem;
-      text-align: center;
-      font-size: 1.35rem;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      color: #f4fbff;
+    .chunk-track {
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
     }
 
-    :host ::ng-deep .stream-nav-btn {
-      min-width: 148px;
-      color: #f4fbff !important;
-      border-color: #8fd4ff !important;
-      background: rgba(115, 200, 253, 0.28) !important;
-      font-weight: 650;
+    .chunk-track .timeline-seg {
+      flex: 1 0 2.25rem;
+      min-width: 2.25rem;
+      max-width: 4.5rem;
     }
 
-    :host ::ng-deep .stream-nav-btn .mdc-button__label,
-    :host ::ng-deep .stream-nav-btn mat-icon {
-      color: #f4fbff !important;
-    }
-
-    :host ::ng-deep .stream-nav-btn:disabled,
-    :host ::ng-deep .stream-nav-btn:disabled .mdc-button__label,
-    :host ::ng-deep .stream-nav-btn:disabled mat-icon {
-      color: rgba(244, 251, 255, 0.45) !important;
-      border-color: rgba(143, 212, 255, 0.35) !important;
+    .chunk-track .timeline-seg.active {
+      background: linear-gradient(180deg, #22c55e, #16a34a);
     }
 
     .stream-hop-error {
@@ -547,6 +621,13 @@ export interface VideoPlayerData {
       border: 1px solid var(--border-color);
     }
 
+    .timeline-track.chunk-track {
+      height: 40px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+    }
+
     .timeline-seg {
       position: relative;
       border: none;
@@ -716,7 +797,7 @@ export interface VideoPlayerData {
     }
   `],
 })
-export class VideoPlayerComponent implements OnInit {
+export class VideoPlayerComponent implements OnInit, AfterViewInit, OnDestroy {
   private videoService = inject(VideoService);
   private explore = inject(ExploreService);
   private sanitizer = inject(DomSanitizer);
@@ -725,6 +806,9 @@ export class VideoPlayerComponent implements OnInit {
 
   @ViewChild('videoPlayer') videoPlayer?: ElementRef<HTMLVideoElement>;
   @ViewChild('overlayCanvas') overlayCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('chunkTrack') chunkTrack?: ElementRef<HTMLElement>;
+  @ViewChild('chunkTimeline') chunkTimeline?: ElementRef<HTMLElement>;
+  @ViewChild('chunkHoverVideo') chunkHoverVideo?: ElementRef<HTMLVideoElement>;
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -742,6 +826,8 @@ export class VideoPlayerComponent implements OnInit {
   private playbackPrepared = false;
   /** Chunk timeline second where the loaded segment MP4 starts. */
   private segmentPlaybackOffset = 0;
+  /** Explore seek switches onto the parent chunk file after the first segment. */
+  private playingChunkFile = false;
   private pendingInlineSeekSec = 0;
   private loadedSegmentSource = '';
   private loadedDetectionSource = '';
@@ -749,6 +835,15 @@ export class VideoPlayerComponent implements OnInit {
 
   streamHop = signal(false);
   streamHopError = signal<string | null>(null);
+  chunkHover = signal<{ index: number; left: number; loading: boolean; failed: boolean } | null>(null);
+  private chunkByIndex = new Map<number, ChunkSearchResult>();
+  private hoverTimer = 0;
+  private hoverLeaveTimer = 0;
+  private hoverGen = 0;
+  private hoverSub?: Subscription;
+  private siblingSub?: Subscription;
+  private prefetchEl?: HTMLVideoElement;
+  private hoverTimeListener?: () => void;
 
   title = computed(() => this.chunk()?.filename ?? this.legacyVideo()?.filename ?? 'Video');
 
@@ -784,9 +879,20 @@ export class VideoPlayerComponent implements OnInit {
 
   constructor(@Inject(MAT_DIALOG_DATA) public data: VideoPlayerData) {}
 
+  ngAfterViewInit() {
+    this.scrollActiveChunk();
+  }
+
+  ngOnDestroy() {
+    this.siblingSub?.unsubscribe();
+    this.closeChunkHover();
+    this.clearPrefetch();
+  }
+
   ngOnInit() {
     this.mode.set(this.data.mode ?? 'search');
     if (this.data.chunk) {
+      this.rememberChunk(this.data.chunk);
       this.chunk.set(this.data.chunk);
       this.queryTerms.set(extractHighlightTerms(this.data.query ?? this.data.chunk.query));
       const targetSeek =
@@ -794,27 +900,19 @@ export class VideoPlayerComponent implements OnInit {
         this.data.chunk.best_match_start_sec ??
         0;
       this.beginSegmentPlayback(this.data.chunk, targetSeek);
+      this.ensureSiblingIndex(this.data.chunk);
     } else if (this.data.video) {
       this.legacyVideo.set(this.data.video);
       this.loadLegacyVideo();
     }
   }
 
-  /** Search: segment MP4s. Explore: full parent chunk from original_video. */
+  /** Open on the short segment file. Explore seek then uses the parent chunk file. */
   private beginSegmentPlayback(chunk: ChunkSearchResult, seekSec: number) {
-    if (this.isExplore()) {
-      const source = chunk.original_video?.trim() ?? '';
-      this.segmentPlaybackOffset = 0;
-      this.pendingInlineSeekSec = Math.max(0, seekSec);
-      this.loadedSegmentSource = source;
-      this.loadStreamSource(source);
-      this.syncDetectionForChunkTime(chunk, seekSec);
-      return;
-    }
-
     const seg = this.findSegmentForTime(chunk, seekSec);
     if (seg?.source?.trim()) {
       const startWithin = Math.max(0, seekSec - seg.segment_start_sec);
+      this.playingChunkFile = false;
       this.segmentPlaybackOffset = seg.segment_start_sec;
       this.pendingInlineSeekSec = startWithin;
       this.loadedSegmentSource = seg.source.trim();
@@ -823,11 +921,18 @@ export class VideoPlayerComponent implements OnInit {
       this.syncDetectionForChunkTime(chunk, seekSec);
       return;
     }
+    this.playChunkFile(chunk, seekSec);
+  }
+
+  private playChunkFile(chunk: ChunkSearchResult, seekSec: number) {
+    this.playingChunkFile = true;
     this.segmentPlaybackOffset = 0;
-    this.pendingInlineSeekSec = 0;
-    this.pendingSeekSec = seekSec;
+    this.pendingInlineSeekSec = Math.max(0, seekSec);
+    this.pendingSeekSec = null;
     this.loadedSegmentSource = chunk.original_video?.trim() ?? '';
+    this.loadedDetectionSource = '';
     this.loadStreamSource(this.loadedSegmentSource);
+    this.syncDetectionForChunkTime(chunk, seekSec);
   }
 
   private findSegmentForTime(
@@ -865,7 +970,7 @@ export class VideoPlayerComponent implements OnInit {
       if (!token) throw new Error('No authentication token found');
       if (!source) throw new Error('No video source available');
 
-      const streamUrl = this.videoService.getStreamUrl(source, token);
+      const streamUrl = this.playbackUrl(source, token);
       this.streamUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(streamUrl));
     } catch (err: any) {
       this.error.set(err.message ?? 'Failed to load video');
@@ -894,6 +999,7 @@ export class VideoPlayerComponent implements OnInit {
 
   onVideoPlaying() {
     this.loading.set(false);
+    this.prefetchAhead();
   }
 
   private clearLoadingOverlay() {
@@ -935,12 +1041,11 @@ export class VideoPlayerComponent implements OnInit {
     if (!el) return;
 
     const c = this.chunk();
-    if (c && this.isExplore()) {
-      this.currentTime.set(el.currentTime);
-      this.syncDetectionForChunkTime(c, el.currentTime);
-    } else {
-      this.currentTime.set(this.segmentPlaybackOffset + el.currentTime);
-    }
+    const chunkTime = this.playingChunkFile
+      ? el.currentTime
+      : this.segmentPlaybackOffset + el.currentTime;
+    this.currentTime.set(chunkTime);
+    if (c) this.syncDetectionForChunkTime(c, chunkTime);
     this.refreshDetectionOverlay();
   }
 
@@ -993,12 +1098,10 @@ export class VideoPlayerComponent implements OnInit {
     const el = this.videoPlayer?.nativeElement;
     if (!el) return 0;
 
-    const c = this.chunk();
-    if (c && this.isExplore()) {
-      const seg = this.findSegmentForTime(c, el.currentTime);
-      if (seg) {
-        return Math.max(0, el.currentTime - seg.segment_start_sec);
-      }
+    if (this.playingChunkFile) {
+      const c = this.chunk();
+      const seg = c ? this.findSegmentForTime(c, el.currentTime) : undefined;
+      if (seg) return Math.max(0, el.currentTime - seg.segment_start_sec);
     }
     return el.currentTime;
   }
@@ -1025,7 +1128,12 @@ export class VideoPlayerComponent implements OnInit {
 
   seekTo(sec: number) {
     const c = this.chunk();
-    if (c && this.isExplore()) {
+    if (c && this.isExplore() && !this.playingChunkFile && c.original_video?.trim()) {
+      this.playChunkFile(c, sec);
+      return;
+    }
+
+    if (c && this.playingChunkFile) {
       const el = this.videoPlayer?.nativeElement;
       if (!el) return;
       void this.seekAndPlay(el, sec, () => {
@@ -1151,24 +1259,280 @@ export class VideoPlayerComponent implements OnInit {
     return this.mode() === 'explore';
   }
 
-  async hopStream(direction: 'prev' | 'next') {
+  streamChunkIndexes(c: ChunkSearchResult): number[] {
+    const listed = c.stream_chunk_indices;
+    if (listed?.length) {
+      return [...listed].sort((a, b) => a - b);
+    }
+    const found = [c.prev_chunk_index, c.chunk_index, c.next_chunk_index]
+      .filter((n): n is number => n != null && n >= 0);
+    return [...new Set(found)].sort((a, b) => a - b);
+  }
+
+  onChunkHoverStart(event: MouseEvent, index: number) {
+    const button = event.currentTarget;
+    if (!(button instanceof HTMLElement)) return;
+    window.clearTimeout(this.hoverLeaveTimer);
+    window.clearTimeout(this.hoverTimer);
+    this.hoverTimer = window.setTimeout(() => this.openChunkHover(button, index), 160);
+  }
+
+  onChunkHoverEnd() {
+    window.clearTimeout(this.hoverTimer);
+    window.clearTimeout(this.hoverLeaveTimer);
+    this.hoverLeaveTimer = window.setTimeout(() => this.closeChunkHover(), 90);
+  }
+
+  private openChunkHover(button: HTMLElement, index: number) {
+    const showing = this.chunkHover();
+    if (showing?.index === index && !showing.failed) {
+      this.chunkHover.set({ ...showing, left: this.hoverLeft(button) });
+      return;
+    }
+    const gen = ++this.hoverGen;
+    this.hoverSub?.unsubscribe();
+    this.chunkHover.set({
+      index,
+      left: this.hoverLeft(button),
+      loading: true,
+      failed: false,
+    });
+    const known = this.cachedChunk(index);
+    if (known) {
+      this.startChunkPreview(known, gen);
+      return;
+    }
+    const localSource = this.previewSourceFor(index);
+    if (localSource) {
+      this.playPreviewSource(localSource, gen);
+      return;
+    }
+    const streamId = this.chunk()?.stream_id;
+    if (!streamId) {
+      this.chunkHover.set(null);
+      return;
+    }
+    this.hoverSub = this.explore.getStreamChunk(streamId, index, this.data.scope ?? 'all').subscribe({
+      next: (detail) => {
+        this.rememberChunk(detail);
+        if (gen !== this.hoverGen) return;
+        this.startChunkPreview(detail, gen);
+      },
+      error: () => {
+        if (gen !== this.hoverGen) return;
+        this.chunkHover.update((hover) => (hover ? { ...hover, loading: false, failed: true } : hover));
+      },
+    });
+  }
+
+  private startChunkPreview(detail: ChunkSearchResult, gen: number) {
+    const seg = this.firstSegment(detail);
+    const source = seg?.source?.trim() || detail.original_video?.trim() || '';
+    const token = localStorage.getItem('video_lab_token');
+    if (!source || !token) {
+      this.chunkHover.update((hover) => (hover ? { ...hover, loading: false, failed: true } : hover));
+      return;
+    }
+    const fullChunk = source === detail.original_video?.trim();
+    this.playPreviewSource(source, gen, fullChunk ? seg : undefined);
+  }
+
+  private playPreviewSource(source: string, gen: number, seg?: TimelineSegment) {
+    const token = localStorage.getItem('video_lab_token');
+    if (!token) {
+      this.chunkHover.update((hover) => (hover ? { ...hover, loading: false, failed: true } : hover));
+      return;
+    }
+    this.chunkHover.update((hover) => (hover ? { ...hover, loading: false, failed: false } : hover));
+    setTimeout(() => {
+      if (gen !== this.hoverGen) return;
+      const video = this.chunkHoverVideo?.nativeElement;
+      if (!video) return;
+      this.clearHoverTimeListener(video);
+      const segmentWindow = seg && seg.segment_end_sec > seg.segment_start_sec && seg.source !== source
+        ? seg
+        : undefined;
+      video.loop = !segmentWindow;
+      if (segmentWindow) {
+        const start = segmentWindow.segment_start_sec;
+        const end = segmentWindow.segment_end_sec;
+        this.hoverTimeListener = () => {
+          if (video.currentTime >= end - 0.05) video.currentTime = start;
+        };
+        video.addEventListener('timeupdate', this.hoverTimeListener);
+      }
+      claimHoverPreview(video);
+      void playHoverPreview(video, this.playbackUrl(source, token), {
+        seekSec: segmentWindow ? segmentWindow.segment_start_sec : 0,
+      });
+    });
+  }
+
+  private closeChunkHover() {
+    window.clearTimeout(this.hoverTimer);
+    window.clearTimeout(this.hoverLeaveTimer);
+    this.hoverGen++;
+    this.hoverSub?.unsubscribe();
+    this.hoverSub = undefined;
+    const video = this.chunkHoverVideo?.nativeElement;
+    if (video) {
+      this.clearHoverTimeListener(video);
+      try {
+        stopHoverPreview(video, false);
+      } catch {
+        video.pause();
+      }
+      releaseHoverPreview(video);
+    }
+    this.chunkHover.set(null);
+  }
+
+  private hoverLeft(button: HTMLElement): number {
+    const timeline = this.chunkTimeline?.nativeElement;
+    const previewWidth = 220;
+    if (!timeline) return previewWidth / 2;
+    const timelineRect = timeline.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    const center = buttonRect.left - timelineRect.left + buttonRect.width / 2;
+    const min = previewWidth / 2 + 8;
+    const max = Math.max(min, timelineRect.width - previewWidth / 2 - 8);
+    return Math.min(max, Math.max(min, center));
+  }
+
+  private cachedChunk(index: number): ChunkSearchResult | null {
+    return this.chunkByIndex.get(index) ?? (this.chunk()?.chunk_index === index ? this.chunk() : null);
+  }
+
+  private ensureSiblingIndex(chunk: ChunkSearchResult) {
+    if (!chunk.stream_id || chunk.chunk_index == null || chunk.stream_chunk_indices?.length) return;
+    this.siblingSub?.unsubscribe();
+    this.siblingSub = this.explore.getStreamChunk(
+      chunk.stream_id,
+      chunk.chunk_index,
+      this.data.scope ?? 'all',
+    ).subscribe({
+      next: (detail) => {
+        this.rememberChunk(detail);
+        const current = this.chunk();
+        if (!current || current.original_video !== chunk.original_video) return;
+        this.chunk.set({
+          ...current,
+          stream_id: detail.stream_id ?? current.stream_id,
+          chunk_index: detail.chunk_index ?? current.chunk_index,
+          stream_chunk_total: detail.stream_chunk_total ?? current.stream_chunk_total,
+          stream_chunk_indices: detail.stream_chunk_indices ?? current.stream_chunk_indices,
+          prev_chunk_index: detail.prev_chunk_index,
+          next_chunk_index: detail.next_chunk_index,
+        });
+        this.scrollActiveChunk();
+      },
+    });
+  }
+
+  private playbackUrl(source: string, token: string): string {
+    return this.videoService.getStreamUrl(source, token);
+  }
+
+  private previewSourceFor(index: number): string | null {
     const current = this.chunk();
-    if (!current?.stream_id || this.streamHop()) return;
-    const index = direction === 'prev' ? current.prev_chunk_index : current.next_chunk_index;
-    if (index == null) return;
+    const listed = current?.stream_chunk_previews?.find((item) => item.chunk_index === index)?.source?.trim();
+    if (listed) return listed;
+    if (current?.chunk_index === index) {
+      return this.firstSegment(current)?.source?.trim() || current.preview_source?.trim() || null;
+    }
+    return null;
+  }
+
+  private nextSourceToWarm(): string | null {
+    const chunk = this.chunk();
+    if (!chunk) return null;
+    if (this.isExplore() && !this.playingChunkFile) {
+      const chunkFile = chunk.original_video?.trim() || '';
+      if (chunkFile && chunkFile !== this.loadedSegmentSource) return chunkFile;
+    }
+    const timeline = [...(chunk.timeline ?? [])].sort((a, b) => a.segment_number - b.segment_number);
+    const at = timeline.findIndex((seg) => seg.source === this.loadedSegmentSource);
+    const nextSegment = at >= 0 ? timeline[at + 1]?.source?.trim() : '';
+    if (nextSegment && nextSegment !== this.loadedSegmentSource) return nextSegment;
+    const index = chunk.chunk_index;
+    if (index == null) return null;
+    const nextChunk = [...(chunk.stream_chunk_previews ?? [])]
+      .sort((a, b) => a.chunk_index - b.chunk_index)
+      .find((item) => item.chunk_index > index && item.source?.trim());
+    const source = nextChunk?.source?.trim() || '';
+    return source && source !== this.loadedSegmentSource ? source : null;
+  }
+
+  private prefetchAhead() {
+    const source = this.nextSourceToWarm();
+    const token = source ? localStorage.getItem('video_lab_token') : null;
+    if (!source || !token) return;
+    const url = this.playbackUrl(source, token);
+    if (!this.prefetchEl) {
+      const video = document.createElement('video');
+      video.muted = true;
+      video.preload = 'auto';
+      video.playsInline = true;
+      video.setAttribute('aria-hidden', 'true');
+      this.prefetchEl = video;
+    }
+    if (this.prefetchEl.dataset['previewUrl'] === url) return;
+    this.prefetchEl.dataset['previewUrl'] = url;
+    this.prefetchEl.src = url;
+    this.prefetchEl.load();
+  }
+
+  private clearPrefetch() {
+    const video = this.prefetchEl;
+    if (!video) return;
+    video.removeAttribute('src');
+    video.load();
+    this.prefetchEl = undefined;
+  }
+
+  private rememberChunk(chunk: ChunkSearchResult) {
+    if (chunk.chunk_index != null) this.chunkByIndex.set(chunk.chunk_index, chunk);
+  }
+
+  private firstSegment(chunk: ChunkSearchResult): TimelineSegment | undefined {
+    return [...(chunk.timeline ?? [])].sort((a, b) => a.segment_number - b.segment_number)[0];
+  }
+
+  private clearHoverTimeListener(video: HTMLVideoElement) {
+    if (this.hoverTimeListener) {
+      video.removeEventListener('timeupdate', this.hoverTimeListener);
+      this.hoverTimeListener = undefined;
+    }
+  }
+
+  async hopToChunk(index: number) {
+    const current = this.chunk();
+    if (!current?.stream_id || this.streamHop() || current.chunk_index === index) return;
+    this.closeChunkHover();
     this.streamHop.set(true);
     this.streamHopError.set(null);
     try {
       const next = await firstValueFrom(
         this.explore.getStreamChunk(current.stream_id, index, this.data.scope ?? 'all'),
       );
+      this.rememberChunk(next);
       this.chunk.set(next);
       this.beginSegmentPlayback(next, 0);
+      this.scrollActiveChunk();
     } catch {
       this.streamHopError.set('Could not open that stream chunk.');
     } finally {
       this.streamHop.set(false);
     }
+  }
+
+  private scrollActiveChunk() {
+    setTimeout(() => {
+      const active = this.chunkTrack?.nativeElement.querySelector('.active');
+      if (active instanceof HTMLElement) {
+        active.scrollIntoView({ inline: 'center', block: 'nearest' });
+      }
+    });
   }
 
   summarizeVideo() {
